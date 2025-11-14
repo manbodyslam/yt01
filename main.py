@@ -2257,7 +2257,7 @@ async def api_generate_async(
                 custom_positions,
                 preset_id
             ),
-            daemon=True
+            daemon=False  # 🔧 Must be False to allow child processes (Pool)
         )
         worker.start()
 
