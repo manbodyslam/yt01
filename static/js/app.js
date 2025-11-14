@@ -164,8 +164,10 @@ document.getElementById('generate-from-video-btn').addEventListener('click', asy
     formData.append('text_style', textStyle);
     formData.append('preset_id', presetId);
 
-    // Show spinner
+    // Show spinner and progress bar
     spinner.classList.add('show');
+    const progressBar = document.getElementById('video-progress');
+    progressBar.classList.add('show');
 
     // 🚀 เริ่ม timer
     console.log('🚀 Starting video timer...');
@@ -272,6 +274,10 @@ document.getElementById('generate-from-video-btn').addEventListener('click', asy
         }
     } finally {
         spinner.classList.remove('show');
+        // ซ่อน progress bar เมื่อเสร็จ (หลัง 3 วินาที)
+        setTimeout(() => {
+            progressBar.classList.remove('show');
+        }, 3000);
     }
 });
 
