@@ -4,8 +4,9 @@ YouTube Thumbnail Generator - FastAPI Application
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional, List, Dict
 from pathlib import Path
@@ -43,6 +44,62 @@ from modules import (
 )
 from modules.thumbnail_validator import ThumbnailValidator
 import json
+
+# ============================================================================
+# Progress Tracking System (Real-time updates via SSE)
+# ============================================================================
+class ProgressTracker:
+    """Track progress of video processing jobs and stream updates via SSE"""
+
+    def __init__(self):
+        self.jobs: Dict[str, Dict] = {}  # {job_id: {progress, status, message, step}}
+
+    def create_job(self, job_id: str) -> None:
+        """Create a new job"""
+        self.jobs[job_id] = {
+            "progress": 0,
+            "status": "started",
+            "message": "เริ่มต้นประมวลผล...",
+            "step": "init",
+            "timestamp": time.time()
+        }
+
+    def update(self, job_id: str, progress: int, message: str, step: str = None) -> None:
+        """Update job progress"""
+        if job_id in self.jobs:
+            self.jobs[job_id].update({
+                "progress": progress,
+                "message": message,
+                "step": step or self.jobs[job_id].get("step", "processing"),
+                "timestamp": time.time()
+            })
+
+    def complete(self, job_id: str, success: bool = True, message: str = None) -> None:
+        """Mark job as completed"""
+        if job_id in self.jobs:
+            self.jobs[job_id].update({
+                "progress": 100 if success else self.jobs[job_id]["progress"],
+                "status": "completed" if success else "failed",
+                "message": message or ("เสร็จสมบูรณ์!" if success else "เกิดข้อผิดพลาด"),
+                "timestamp": time.time()
+            })
+
+    def get_job(self, job_id: str) -> Optional[Dict]:
+        """Get job status"""
+        return self.jobs.get(job_id)
+
+    def cleanup_old_jobs(self, max_age_seconds: int = 600) -> None:
+        """Remove jobs older than max_age_seconds (default: 10 minutes)"""
+        current_time = time.time()
+        to_remove = [
+            job_id for job_id, job in self.jobs.items()
+            if current_time - job.get("timestamp", 0) > max_age_seconds
+        ]
+        for job_id in to_remove:
+            del self.jobs[job_id]
+
+# Global progress tracker
+progress_tracker = ProgressTracker()
 
 # Configure logging
 logger.remove()
@@ -339,6 +396,7 @@ class GenerateResponse(BaseModel):
     filename: Optional[str] = None
     metadata: Optional[dict] = None
     error: Optional[str] = None
+    job_id: Optional[str] = None  # For real-time progress tracking via SSE
 
 
 class StatusResponse(BaseModel):
@@ -874,6 +932,72 @@ async def health_detailed():
     return health_status
 
 
+@app.get("/progress/{job_id}")
+async def stream_progress(job_id: str):
+    """
+    Stream real-time progress updates via Server-Sent Events (SSE)
+
+    Usage:
+        const eventSource = new EventSource(`/progress/${jobId}`);
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            console.log(data.progress, data.message);
+        };
+    """
+    async def event_generator():
+        """Generate SSE events"""
+        # Send initial status
+        job = progress_tracker.get_job(job_id)
+        if not job:
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": "Job not found"})
+            }
+            return
+
+        # Stream progress updates
+        last_progress = -1
+        while True:
+            job = progress_tracker.get_job(job_id)
+
+            if not job:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "Job not found"})
+                }
+                break
+
+            # Send update if progress changed
+            if job["progress"] != last_progress:
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({
+                        "progress": job["progress"],
+                        "message": job["message"],
+                        "step": job["step"],
+                        "status": job.get("status", "processing")
+                    })
+                }
+                last_progress = job["progress"]
+
+            # Check if completed
+            if job.get("status") in ["completed", "failed"]:
+                yield {
+                    "event": "complete",
+                    "data": json.dumps({
+                        "progress": job["progress"],
+                        "message": job["message"],
+                        "status": job["status"]
+                    })
+                }
+                break
+
+            # Wait before next update
+            await asyncio.sleep(0.5)  # Check every 0.5 seconds
+
+    return EventSourceResponse(event_generator())
+
+
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_thumbnail(request: GenerateRequest):
     """
@@ -1262,9 +1386,16 @@ async def generate_from_video(
     Returns:
         Generation result
     """
+    # สร้าง job_id สำหรับติดตาม progress
+    job_id = str(uuid4())
+    progress_tracker.create_job(job_id)
+
     try:
         logger.info(f"Received generate-from-video request: title={title}, num_characters={num_characters}, num_frames={num_frames}, preset_id={preset_id}")
         logger.debug(f"Video file: {video.filename}, content_type={video.content_type}")
+
+        # อัปเดต progress: เริ่มต้น
+        progress_tracker.update(job_id, 5, "กำลังอัปโหลดวิดีโอ...", "upload")
 
         # 🎨 Apply preset configuration
         vertical_align = "top"  # Default
@@ -1291,9 +1422,13 @@ async def generate_from_video(
         upload_result = await upload_video(video, extract_frames=False, num_frames=num_frames)
 
         if not upload_result.success:
+            progress_tracker.complete(job_id, False, f"อัปโหลดล้มเหลว: {upload_result.error}")
             raise HTTPException(status_code=500, detail=upload_result.error)
 
         logger.info(f"Extracted {upload_result.extracted_frames} frames, generating thumbnail...")
+
+        # อัปเดต progress: อัปโหลดเสร็จ เริ่มดึงเฟรม
+        progress_tracker.update(job_id, 15, "กำลังดึงเฟรมจากวิดีโอ...", "extract_frames")
 
         # Parse custom_positions JSON if provided
         parsed_positions = None
@@ -1328,11 +1463,17 @@ async def generate_from_video(
         extracted_frames = extractor.extract_from_video(video_path)
         logger.info(f"✅ Extracted {len(extracted_frames)} high-quality frames")
 
+        # อัปเดต progress: ดึงเฟรมเสร็จ
+        progress_tracker.update(job_id, 40, f"ดึงเฟรมเสร็จ {len(extracted_frames)} ภาพ", "ingest")
+
         # Ingest all extracted frames
         logger.info(f"🔄 Ingesting {len(extracted_frames)} frames...")
         pipeline.ingestor.images = []
         pipeline.ingestor.ingest()
         logger.info(f"✅ Total frames ingested: {len(pipeline.ingestor.images)}")
+
+        # อัปเดต progress: เริ่มวิเคราะห์ใบหน้า
+        progress_tracker.update(job_id, 50, "กำลังวิเคราะห์ใบหน้า...", "analyze_faces")
 
         # 🔄 RETRY LOGIC: ถ้าหาคนไม่ครบ 3 คน → retry อีก 1 ครั้ง
         max_retries = 1  # Retry 1 ครั้งถ้าหาคนไม่ครบ
@@ -1344,6 +1485,9 @@ async def generate_from_video(
                 if not layout_type or layout_type not in TRI_LAYOUTS:
                     layout_type = "tri_hero"  # ค่าเริ่มต้น
                     logger.info(f"🎨 Using default tri layout: {layout_type}")
+
+                # อัปเดต progress: เริ่มสร้าง thumbnail
+                progress_tracker.update(job_id, 80, "กำลังสร้าง thumbnail...", "generate")
 
                 # Generate thumbnail from extracted frames (บังคับ 3 คน)
                 result = pipeline.generate(
@@ -1358,8 +1502,12 @@ async def generate_from_video(
                 )
 
                 if result['success']:
+                    # อัปเดต progress: เสร็จสมบูรณ์!
+                    progress_tracker.complete(job_id, True, "สร้าง thumbnail เสร็จแล้ว!")
+                    result['job_id'] = job_id  # เพิ่ม job_id ใน response
                     return GenerateResponse(**result)
                 else:
+                    progress_tracker.complete(job_id, False, result.get('error', 'เกิดข้อผิดพลาด'))
                     raise HTTPException(status_code=500, detail=result.get('error', 'Unknown error'))
 
             except InsufficientCharactersError as e:

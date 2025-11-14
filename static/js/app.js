@@ -173,14 +173,13 @@ document.getElementById('generate-from-video-btn').addEventListener('click', asy
     videoTimer.updateStep('อัปโหลดวิดีโอ', 10, 'กำลังอัปโหลดไฟล์วิดีโอไปยัง server...');
     console.log('✅ Timer started');
 
+    let eventSource; // สำหรับ SSE connection
+
     try {
         const response = await fetch(`${API_BASE}/generate-from-video`, {
             method: 'POST',
             body: formData
         });
-
-        // อัปเดต progress หลังอัปโหลดเสร็จ
-        videoTimer.updateStep('ประมวลผลวิดีโอ', 50, 'กำลังดึงเฟรม ตรวจจับใบหน้า และสร้าง thumbnail...');
 
         // Handle non-200 responses
         if (!response.ok) {
@@ -191,16 +190,53 @@ document.getElementById('generate-from-video-btn').addEventListener('click', asy
             } catch (e) {
                 errorMessage = `HTTP ${response.status}: ${response.statusText}`;
             }
+            videoTimer.finish(false);
             showError(errorAlert, errorMessage);
             return;
         }
 
         const data = await response.json();
 
+        // 🚀 เชื่อมต่อ SSE เพื่อรับ real-time progress
+        if (data.job_id) {
+            eventSource = new EventSource(`${API_BASE}/progress/${data.job_id}`);
+
+            eventSource.addEventListener('progress', (event) => {
+                const progressData = JSON.parse(event.data);
+                console.log('Progress update:', progressData);
+
+                // อัปเดต progress bar
+                videoTimer.updateStep(
+                    progressData.message,
+                    progressData.progress,
+                    progressData.message
+                );
+            });
+
+            eventSource.addEventListener('complete', (event) => {
+                const progressData = JSON.parse(event.data);
+                console.log('Complete:', progressData);
+
+                // ปิด SSE connection
+                eventSource.close();
+
+                // อัปเดต timer ว่าเสร็จแล้ว
+                if (progressData.status === 'completed') {
+                    videoTimer.updateStep('เสร็จสมบูรณ์!', 100, 'สร้าง thumbnail สำเร็จ!');
+                    videoTimer.finish(true);
+                } else {
+                    videoTimer.finish(false);
+                }
+            });
+
+            eventSource.addEventListener('error', (event) => {
+                console.error('SSE error:', event);
+                eventSource.close();
+            });
+        }
+
         if (data.success) {
             // 🎉 เสร็จสมบูรณ์!
-            videoTimer.updateStep('เสร็จสมบูรณ์!', 100, 'สร้าง thumbnail สำเร็จ!');
-            videoTimer.finish(true);
 
             // Show success
             showSuccess(successAlert, 'สร้าง Thumbnail สำเร็จ!');
@@ -229,6 +265,11 @@ document.getElementById('generate-from-video-btn').addEventListener('click', asy
         console.error('Error:', error);
         videoTimer.finish(false);
         showError(errorAlert, 'ไม่สามารถเชื่อมต่อกับ API ได้: ' + error.message);
+
+        // ปิด SSE connection ถ้ามี
+        if (eventSource) {
+            eventSource.close();
+        }
     } finally {
         spinner.classList.remove('show');
     }

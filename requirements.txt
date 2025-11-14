@@ -4,6 +4,7 @@ uvicorn[standard]>=0.32.0
 python-multipart>=0.0.12
 pydantic>=2.10.0
 pydantic-settings>=2.6.0
+sse-starlette>=2.1.0
 
 # Computer Vision & Face Detection
 insightface>=0.7.3
