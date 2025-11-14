@@ -2295,13 +2295,13 @@ async def get_task_status(task_id: str):
         curl "http://localhost:8000/api/task-status/abc-123-def"
         ```
     """
-    if task_id not in tasks_storage:
+    task_info = task_storage.get(task_id)
+
+    if task_info is None:
         raise HTTPException(
             status_code=404,
             detail=f"Task '{task_id}' not found. It may have expired or never existed."
         )
-
-    task_info = task_storage.get(task_id)
 
     return JSONResponse({
         "task_id": task_id,
