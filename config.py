@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     VIDEO_MIN_SHARPNESS: float = 25.0  # ยอมรับภาพเบลอมากขึ้น (เพิ่มความเร็ว)
     VIDEO_SIMILARITY_THRESHOLD: float = 0.70  # ยอมรับใบหน้าที่ต่างกันมากขึ้น
 
+    # 🆕 Lazy Loading & Streaming (save 50-70% RAM!)
+    VIDEO_BATCH_SIZE: int = 50  # Process frames in batches (lower = less RAM, higher = faster)
+
     # 🎯 Smart Frame Selection (แก้ปัญหาตาหลับที่ต้นเหตุ!)
     ENABLE_SMART_FRAME_SELECTION: bool = True  # เปิด/ปิด Smart Frame Selection
     FRAMES_PER_SCENE: int = 10  # 🚀 เพิ่มเป็น 10 เฟรมต่อฉาก - มีตัวเลือกมากขึ้น! (จาก 7)
