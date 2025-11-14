@@ -1844,6 +1844,41 @@ async def api_generate(
 # ASYNC API ENDPOINTS (to prevent Cloudflare timeout)
 # ============================================================================
 
+def cleanup_workspace(task_id: str, video_path: Optional[Path] = None):
+    """
+    🧹 Clean up workspace after task completion
+
+    Deletes:
+    - All frames in workspace/raw/
+    - Video file (if provided)
+    - Prevents next task from using old images
+    """
+    import shutil
+
+    try:
+        # Delete all frames in workspace/raw
+        raw_dir = settings.RAW_DIR
+        if raw_dir.exists():
+            deleted_frames = 0
+            for frame_file in raw_dir.glob("*.jpg"):
+                frame_file.unlink()
+                deleted_frames += 1
+            logger.info(f"🧹 [Task {task_id}] Deleted {deleted_frames} frames from workspace/raw")
+
+        # Delete video file if provided
+        if video_path and Path(video_path).exists():
+            Path(video_path).unlink()
+            logger.info(f"🧹 [Task {task_id}] Deleted video: {video_path.name}")
+
+        # Clear pipeline ingestor cache
+        pipeline.ingestor.images = []
+
+        logger.info(f"✅ [Task {task_id}] Workspace cleaned up successfully")
+
+    except Exception as e:
+        logger.warning(f"⚠️  [Task {task_id}] Cleanup warning: {e}")
+
+
 async def worker_process_async(
     task_id: str,
     video_path: Optional[Path],
@@ -1864,6 +1899,9 @@ async def worker_process_async(
     """
     try:
         logger.info(f"🔄 [Task {task_id}] Starting background processing...")
+
+        # 🧹 Clean up workspace before starting (prevent using old images)
+        cleanup_workspace(task_id, None)
 
         # Update status: downloading (if from Google Drive)
         if google_drive_url:
@@ -2017,6 +2055,10 @@ async def worker_process_async(
                         "completed_at": datetime.now().isoformat()
                     })
                     logger.info(f"✅ [Task {task_id}] Completed: {result['filename']}")
+
+                    # 🧹 Clean up workspace after success
+                    cleanup_workspace(task_id, video_path)
+
                     return
                 else:
                     raise Exception(result.get('error', 'Unknown error'))
@@ -2039,6 +2081,10 @@ async def worker_process_async(
                         "completed_at": datetime.now().isoformat()
                     })
                     logger.error(f"❌ [Task {task_id}] {error_msg}")
+
+                    # 🧹 Clean up workspace after failure
+                    cleanup_workspace(task_id, video_path)
+
                     return
 
                 # Retry with more frames
@@ -2069,6 +2115,9 @@ async def worker_process_async(
             "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
             "completed_at": datetime.now().isoformat()
         })
+
+        # 🧹 Clean up workspace after error
+        cleanup_workspace(task_id, video_path)
 
 
 def worker_process(
