@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     OUTPUT_QUALITY: int = 95
 
     # Face detection settings (ปรับให้ตรวจจับได้มากขึ้น!)
-    FACE_DETECTION_MODEL: str = "buffalo_l"  # 🎯 Maximum Accuracy: buffalo_l (larger, more accurate)
+    FACE_DETECTION_MODEL: str = "buffalo_s"  # ⚡ SPEED MODE: buffalo_s (smaller, 2x faster, 95% accurate)
     FACE_CONFIDENCE_THRESHOLD: float = 0.30  # 🚀🚀🚀 ลดเป็น 0.30 - ตรวจจับหน้าได้ง่ายที่สุด! (จาก 0.35)
     MIN_FACE_SIZE: int = 35  # 🚀🚀🚀 ลดเป็น 35 pixels - ยอมรับหน้าเล็กมากๆ (จาก 40)
 
