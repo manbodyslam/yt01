@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+workspace/
+*.log
+*.mp4
+*.avi
+*.mov
+*.mkv
+.env.local
+
+# Git
+.git/
+.gitignore
+
+# Models (will be downloaded on first run)
+# models/
+
+# Documentation
+*.md
+!README.md
+!RAILWAY_DEPLOYMENT.md

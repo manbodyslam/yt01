@@ -1,0 +1,20 @@
+{
+  "1": {
+    "id": "1",
+    "name": "แบบครึ่งตัว (หัว-เอว)",
+    "description": "แสดงตัวละครตั้งแต่หัวถึงเอว - เหมาะสำหรับ YouTube",
+    "num_characters": 3,
+    "crop_point": "waist",
+    "layout_type": "tri_hero",
+    "vertical_align": "top"
+  },
+  "2": {
+    "id": "2",
+    "name": "แบบเต็มตัว (ชิดขอบล่าง)",
+    "description": "แสดงตัวละคร 3 คนขนาดใหญ่เท่าแบบแรก แต่ชิดขอบล่าง - เหมาะสำหรับ YouTube",
+    "num_characters": 3,
+    "crop_point": "waist",
+    "layout_type": "tri_hero",
+    "vertical_align": "bottom"
+  }
+}
