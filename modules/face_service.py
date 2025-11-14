@@ -52,20 +52,55 @@ class FaceService:
 
     def _load_model(self):
         """
-        Load InsightFace model
+        🆕 Load InsightFace model with GPU support and ONNX optimization
         """
         try:
             import insightface
             from insightface.app import FaceAnalysis
+            import onnxruntime as ort
 
+            # 🆕 Check available providers (GPU/CPU)
+            available_providers = ort.get_available_providers()
+            logger.info(f"Available ONNX Runtime providers: {available_providers}")
+
+            # 🆕 Select best provider (GPU first, fallback to CPU)
+            providers = []
+            if 'CUDAExecutionProvider' in available_providers:
+                providers.append('CUDAExecutionProvider')
+                logger.info("🎮 GPU (CUDA) detected - Using GPU acceleration!")
+            elif 'TensorrtExecutionProvider' in available_providers:
+                providers.append('TensorrtExecutionProvider')
+                logger.info("🎮 TensorRT detected - Using TensorRT acceleration!")
+
+            # Always add CPU as fallback
+            providers.append('CPUExecutionProvider')
+            logger.info(f"Selected providers: {providers}")
+
+            # 🆕 Configure ONNX Runtime session options
+            if settings.ONNX_ENABLE_OPTIMIZATION:
+                import os
+                # Set thread count via environment variable (InsightFace uses ONNX Runtime internally)
+                os.environ['OMP_NUM_THREADS'] = str(settings.ONNX_NUM_THREADS)
+                os.environ['MKL_NUM_THREADS'] = str(settings.ONNX_NUM_THREADS)
+                logger.info(
+                    f"⚡ ONNX Runtime optimization enabled: "
+                    f"threads={settings.ONNX_NUM_THREADS}, "
+                    f"mode={settings.ONNX_EXECUTION_MODE}"
+                )
+
+            # Load model with optimized providers
             self.model = FaceAnalysis(
                 name=settings.FACE_DETECTION_MODEL,
-                providers=['CPUExecutionProvider']  # Use CPU, change to CUDA if GPU available
+                providers=providers
             )
+
             # 🚀 เพิ่ม detection size เป็น 1280x1280 เพื่อครอบคลุมวิดีโอ 1080x1920 ได้เต็มที่!
             self.model.prepare(ctx_id=0, det_size=(1280, 1280), det_thresh=settings.FACE_CONFIDENCE_THRESHOLD)
 
-            logger.info(f"InsightFace model '{settings.FACE_DETECTION_MODEL}' loaded successfully")
+            logger.info(
+                f"✅ InsightFace model '{settings.FACE_DETECTION_MODEL}' loaded successfully "
+                f"(Provider: {providers[0]})"
+            )
 
         except Exception as e:
             logger.error(f"Failed to load InsightFace model: {e}")

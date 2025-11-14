@@ -158,7 +158,8 @@ class VideoExtractorV2:
                 'frames_to_extract': frames_per_scene,
                 'fps': fps,
                 'output_dir': str(self.output_dir),
-                'min_sharpness': self.min_sharpness
+                'min_sharpness': self.min_sharpness,
+                'similarity_threshold': settings.VIDEO_FRAME_SIMILARITY_THRESHOLD  # 🆕 Skip duplicates
             })
 
         # Extract frames in parallel
@@ -295,7 +296,8 @@ class VideoExtractorV2:
                 'frames_to_extract': frames_per_scene,
                 'fps': fps,
                 'output_dir': str(self.output_dir),
-                'min_sharpness': self.min_sharpness
+                'min_sharpness': self.min_sharpness,
+                'similarity_threshold': settings.VIDEO_FRAME_SIMILARITY_THRESHOLD  # 🆕 Skip duplicates
             })
 
         # Process in batches
@@ -528,7 +530,7 @@ class VideoExtractorV2:
 
 def _extract_scene_frames(task: Dict) -> List[Path]:
     """
-    Extract frames from a single scene (called by multiprocessing worker)
+    🆕 Extract frames from a single scene with duplicate detection
 
     Args:
         task: Dictionary with extraction parameters
@@ -544,6 +546,7 @@ def _extract_scene_frames(task: Dict) -> List[Path]:
     fps = task['fps']
     output_dir = Path(task['output_dir'])
     min_sharpness = task['min_sharpness']
+    similarity_threshold = task.get('similarity_threshold', 0.85)  # 🆕 Skip frames >85% similar
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -555,13 +558,14 @@ def _extract_scene_frames(task: Dict) -> List[Path]:
         return []
 
     # Calculate interval
-    interval = max(1, scene_length // frames_to_extract)
+    interval = max(1, scene_length // (frames_to_extract * 2))  # 🆕 Extract 2x more candidates
 
     extracted = []
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
     frame_count = start_frame
     frames_in_scene = 0
+    last_frame = None  # 🆕 Track last extracted frame for similarity check
 
     try:
         while frame_count < end_frame and len(extracted) < frames_to_extract:
@@ -573,17 +577,26 @@ def _extract_scene_frames(task: Dict) -> List[Path]:
             if frames_in_scene % interval == 0:
                 # Quality check
                 if _check_frame_quality(frame, min_sharpness):
-                    timestamp = frame_count / fps if fps > 0 else 0
-                    frame_path = _save_frame_worker(
-                        frame,
-                        Path(video_path).stem,
-                        frame_count,
-                        timestamp,
-                        scene_id,
-                        output_dir
-                    )
-                    if frame_path:
-                        extracted.append(frame_path)
+                    # 🆕 Check similarity with last frame (skip duplicates)
+                    is_diverse = True
+                    if last_frame is not None:
+                        similarity = _calculate_frame_similarity(last_frame, frame)
+                        if similarity > similarity_threshold:
+                            is_diverse = False  # Too similar, skip
+
+                    if is_diverse:
+                        timestamp = frame_count / fps if fps > 0 else 0
+                        frame_path = _save_frame_worker(
+                            frame,
+                            Path(video_path).stem,
+                            frame_count,
+                            timestamp,
+                            scene_id,
+                            output_dir
+                        )
+                        if frame_path:
+                            extracted.append(frame_path)
+                            last_frame = frame.copy()  # 🆕 Save for next comparison
 
             frame_count += 1
             frames_in_scene += 1
@@ -626,6 +639,45 @@ def _check_frame_quality(frame: np.ndarray, min_sharpness: float) -> bool:
         return False
 
     return True
+
+
+def _calculate_frame_similarity(frame1: np.ndarray, frame2: np.ndarray) -> float:
+    """
+    Calculate similarity between two frames using histogram comparison
+
+    Args:
+        frame1: First frame (BGR)
+        frame2: Second frame (BGR)
+
+    Returns:
+        Similarity score (0.0 = different, 1.0 = identical)
+    """
+    try:
+        # Resize for faster comparison
+        size = (64, 64)
+        f1 = cv2.resize(frame1, size)
+        f2 = cv2.resize(frame2, size)
+
+        # Convert to grayscale
+        gray1 = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(f2, cv2.COLOR_BGR2GRAY)
+
+        # Calculate histogram
+        hist1 = cv2.calcHist([gray1], [0], None, [256], [0, 256])
+        hist2 = cv2.calcHist([gray2], [0], None, [256], [0, 256])
+
+        # Normalize histograms
+        cv2.normalize(hist1, hist1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        cv2.normalize(hist2, hist2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+
+        # Compare histograms using correlation
+        similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL)
+
+        return max(0.0, min(1.0, similarity))
+
+    except Exception as e:
+        logger.warning(f"Failed to calculate frame similarity: {e}")
+        return 0.0
 
 
 def _save_frame_worker(
