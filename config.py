@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Video extraction settings (⚡ SPEED MODE: 5x faster!)
     VIDEO_FORMATS: list[str] = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"]
     VIDEO_FRAMES_PER_MINUTE: int = 15  # 🚀 ลดเป็น 15 รูป/นาที (ทุก 4 วินาที) - เร็วขึ้น 50%!
-    VIDEO_MAX_FRAMES: int = 100  # ⚡ ULTRA SPEED MODE: 100 frames (เร็ว 10x, แม่นยำ 85%+)
+    VIDEO_MAX_FRAMES: int = 150  # ⚡ BALANCED MODE: 150 frames (เร็ว 7x, แม่นยำ 90%+)
     VIDEO_MIN_SHARPNESS: float = 25.0  # ยอมรับภาพเบลอมากขึ้น (เพิ่มความเร็ว)
     VIDEO_SIMILARITY_THRESHOLD: float = 0.70  # ยอมรับใบหน้าที่ต่างกันมากขึ้น
 
@@ -59,8 +59,8 @@ class Settings(BaseSettings):
 
     # Face detection settings (ปรับให้ตรวจจับได้มากขึ้น!)
     FACE_DETECTION_MODEL: str = "buffalo_s"  # ⚡ SPEED MODE: buffalo_s (smaller, 2x faster, 95% accurate)
-    FACE_CONFIDENCE_THRESHOLD: float = 0.30  # 🚀🚀🚀 ลดเป็น 0.30 - ตรวจจับหน้าได้ง่ายที่สุด! (จาก 0.35)
-    MIN_FACE_SIZE: int = 35  # 🚀🚀🚀 ลดเป็น 35 pixels - ยอมรับหน้าเล็กมากๆ (จาก 40)
+    FACE_CONFIDENCE_THRESHOLD: float = 0.45  # 🎯 เข้มงวด - ต้องแน่ใจว่าเป็นหน้าชัดเจน
+    MIN_FACE_SIZE: int = 50  # 🎯 เข้มงวด - หน้าต้องใหญ่พอ ชัดเจน
 
     # 🆕 ONNX Runtime Optimization (2-4x faster, 75% less RAM!)
     ONNX_ENABLE_OPTIMIZATION: bool = True  # Enable ONNX Runtime optimizations
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     CLUSTER_MERGE_THRESHOLD: float = 0.18  # 🚀 เพิ่มเป็น 0.18 - รวม clusters ของคนเดียวกันที่แยกออก
 
     # LAYER 3: Character selection validation (ป้องกันเลือกคนเดียวกันซ้ำ)
-    MIN_CHARACTER_DISTANCE: float = 0.35  # 🚀 เพิ่มเป็น 0.35 - บล็อกคนที่หน้าคล้ายกันมากเกินไป (คนเดียวกัน)
+    MIN_CHARACTER_DISTANCE: float = 0.50  # 🎯 STRICT MODE: 0.50 - บล็อกคนที่หน้าคล้ายกัน (เข้มงวดมาก!)
 
     # LAYER 4: Solo shot enforcement (เพิ่มความแม่นยำ 100%)
     PREFER_SOLO_SHOTS: bool = True  # บังคับเลือกแค่ solo shots (1 คนในเฟรม) เท่านั้น
