@@ -1853,7 +1853,8 @@ async def process_video_async(
     num_frames: int,
     text_style: str,
     layout_type: Optional[str],
-    custom_positions: Optional[str]
+    custom_positions: Optional[str],
+    preset_id: Optional[str] = "1"  # 🎨 Add preset support
 ):
     """
     Background task to process video and generate thumbnail
@@ -1952,6 +1953,27 @@ async def process_video_async(
         if not layout_type or layout_type not in TRI_LAYOUTS:
             layout_type = "tri_hero"
 
+        # 🎨 Apply preset configuration
+        vertical_align = "top"  # Default
+        if preset_id and preset_id in PRESETS:
+            preset = PRESETS[preset_id]
+            crop_point = preset.get("crop_point", "waist")
+            crop_multiplier = CROP_MULTIPLIERS.get(crop_point, 3.5)
+            vertical_align = preset.get("vertical_align", "top")
+
+            # Temporarily modify crop settings
+            original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+            settings.CHARACTER_CROP_HEIGHT_MULTIPLIER = crop_multiplier
+
+            logger.info(f"🎨 [Task {task_id}] Applied preset '{preset['name']}' (ID: {preset_id})")
+            logger.info(f"   └─ Crop: {crop_point} (multiplier: {crop_multiplier})")
+            logger.info(f"   └─ Vertical align: {vertical_align}")
+        else:
+            # Use default if preset not found
+            original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+            if preset_id and preset_id not in PRESETS:
+                logger.warning(f"⚠️  [Task {task_id}] Preset ID '{preset_id}' not found, using default")
+
         # Retry logic
         max_retries = 1
         retry_count = 0
@@ -1974,7 +1996,8 @@ async def process_video_async(
                     source_folder=None,
                     text_style=text_style,
                     layout_type=layout_type,
-                    custom_positions=parsed_positions
+                    custom_positions=parsed_positions,
+                    vertical_align=vertical_align  # 🎨 Use preset vertical alignment
                 )
 
                 if result['success']:
@@ -2058,7 +2081,8 @@ async def api_generate_async(
     num_frames: int = Form(150),
     text_style: str = Form("style1"),
     layout_type: Optional[str] = Form(None),
-    custom_positions: Optional[str] = Form(None)
+    custom_positions: Optional[str] = Form(None),
+    preset_id: Optional[str] = Form("1")  # 🎨 Preset: 1=ครึ่งตัว(top), 2=เต็มตัว(bottom)
 ):
     """
     🚀 ASYNC API: Generate thumbnail without timeout (for Cloudflare, n8n, etc.)
@@ -2198,7 +2222,8 @@ async def api_generate_async(
             num_frames=num_frames,
             text_style=text_style,
             layout_type=layout_type,
-            custom_positions=custom_positions
+            custom_positions=custom_positions,
+            preset_id=preset_id  # 🎨 Add preset support
         )
 
         logger.info(f"🚀 [Task {task_id}] Background task started")
