@@ -29,6 +29,7 @@ from uuid import uuid4
 import asyncio
 import traceback
 import time
+import gc
 
 from config import settings
 from modules import (
@@ -1505,6 +1506,10 @@ async def generate_from_video(
                     # อัปเดต progress: เสร็จสมบูรณ์!
                     progress_tracker.complete(job_id, True, "สร้าง thumbnail เสร็จแล้ว!")
                     result['job_id'] = job_id  # เพิ่ม job_id ใน response
+
+                    # 🧹 Garbage Collection เพื่อคืน RAM
+                    gc.collect()
+
                     return GenerateResponse(**result)
                 else:
                     progress_tracker.complete(job_id, False, result.get('error', 'เกิดข้อผิดพลาด'))
