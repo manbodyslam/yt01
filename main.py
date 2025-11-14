@@ -30,8 +30,10 @@ import asyncio
 import traceback
 import time
 import gc
+from multiprocessing import Process
 
 from config import settings
+from utils.task_storage import get_storage
 from modules import (
     Ingestor,
     FaceService,
@@ -175,9 +177,8 @@ if static_dir.exists():
 # ============================================================================
 # ASYNC TASK STORAGE (for long-running operations)
 # ============================================================================
-# In-memory task storage
-# NOTE: In production, use Redis or a database for task persistence
-tasks_storage: Dict[str, Dict] = {}
+# File-based task storage for multi-process communication
+task_storage = get_storage()
 
 
 # ============================================================================
@@ -1843,7 +1844,7 @@ async def api_generate(
 # ASYNC API ENDPOINTS (to prevent Cloudflare timeout)
 # ============================================================================
 
-async def process_video_async(
+def worker_process(
     task_id: str,
     video_path: Optional[Path],
     google_drive_url: Optional[str],
@@ -1866,7 +1867,7 @@ async def process_video_async(
 
         # Update status: downloading (if from Google Drive)
         if google_drive_url:
-            tasks_storage[task_id] = {
+            task_storage.update(task_id, {
                 "status": "downloading",
                 "progress": 10,
                 "message": f"Downloading video from Google Drive...",
@@ -1886,11 +1887,11 @@ async def process_video_async(
             )
 
             if not success:
-                tasks_storage[task_id] = {
+                task_storage.update(task_id, {
                     "status": "failed",
                     "progress": 0,
                     "error": error,
-                    "created_at": tasks_storage[task_id]["created_at"],
+                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
                     "completed_at": datetime.now().isoformat()
                 }
                 return
@@ -1898,11 +1899,11 @@ async def process_video_async(
             logger.info(f"✅ [Task {task_id}] Downloaded: {video_path.name}")
 
         # Update status: extracting frames
-        tasks_storage[task_id] = {
+        task_storage.update(task_id, {
             "status": "extracting_frames",
             "progress": 30,
             "message": f"Extracting frames from video (target: {num_frames} frames)...",
-            "created_at": tasks_storage[task_id].get("created_at", datetime.now().isoformat())
+            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
         }
 
         # Extract frames
@@ -1914,11 +1915,11 @@ async def process_video_async(
         logger.info(f"✅ [Task {task_id}] Extracted {len(extracted_frames)} frames")
 
         # Update status: detecting faces
-        tasks_storage[task_id] = {
+        task_storage.update(task_id, {
             "status": "detecting_faces",
             "progress": 50,
             "message": f"Detecting faces in {len(extracted_frames)} frames...",
-            "created_at": tasks_storage[task_id]["created_at"]
+            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
         }
 
         # Ingest frames
@@ -1936,11 +1937,11 @@ async def process_video_async(
                 logger.warning(f"[Task {task_id}] Failed to parse custom_positions: {e}")
 
         # Update status: clustering characters
-        tasks_storage[task_id] = {
+        task_storage.update(task_id, {
             "status": "clustering",
             "progress": 70,
             "message": f"Clustering faces and selecting best {num_characters} characters...",
-            "created_at": tasks_storage[task_id]["created_at"]
+            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
         }
 
         # Import custom exception
@@ -1981,11 +1982,11 @@ async def process_video_async(
         while retry_count <= max_retries:
             try:
                 # Update status: generating thumbnail
-                tasks_storage[task_id] = {
+                task_storage.update(task_id, {
                     "status": "generating",
                     "progress": 85,
                     "message": f"Generating thumbnail with layout '{layout_type}'...",
-                    "created_at": tasks_storage[task_id]["created_at"]
+                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
                 }
 
                 # Generate thumbnail
@@ -2002,7 +2003,7 @@ async def process_video_async(
 
                 if result['success']:
                     # Success!
-                    tasks_storage[task_id] = {
+                    task_storage.update(task_id, {
                         "status": "completed",
                         "progress": 100,
                         "message": "Thumbnail generated successfully!",
@@ -2012,7 +2013,7 @@ async def process_video_async(
                             "filename": result['filename'],
                             "metadata": result.get('metadata', {})
                         },
-                        "created_at": tasks_storage[task_id]["created_at"],
+                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
                         "completed_at": datetime.now().isoformat()
                     }
                     logger.info(f"✅ [Task {task_id}] Completed: {result['filename']}")
@@ -2030,11 +2031,11 @@ async def process_video_async(
                         f"❌ ต้องการนักแสดง {REQUIRED_CHARACTERS} คน แต่พบเพียง {found_people} คนเท่านั้น!\n"
                         f"📹 กรุณาอัพโหลดวิดีโอที่มีนักแสดงชัดเจนอย่างน้อย {REQUIRED_CHARACTERS} คน"
                     )
-                    tasks_storage[task_id] = {
+                    task_storage.update(task_id, {
                         "status": "failed",
                         "progress": 0,
                         "error": error_msg,
-                        "created_at": tasks_storage[task_id]["created_at"],
+                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
                         "completed_at": datetime.now().isoformat()
                     }
                     logger.error(f"❌ [Task {task_id}] {error_msg}")
@@ -2042,11 +2043,11 @@ async def process_video_async(
 
                 # Retry with more frames
                 logger.warning(f"⚠️  [Task {task_id}] Retry {retry_count}/{max_retries}: extracting more frames...")
-                tasks_storage[task_id] = {
+                task_storage.update(task_id, {
                     "status": "extracting_frames",
                     "progress": 35,
                     "message": f"Retrying: extracting more frames (attempt {retry_count + 1}/{max_retries + 1})...",
-                    "created_at": tasks_storage[task_id]["created_at"]
+                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
                 }
 
                 # Extract additional frames
@@ -2061,11 +2062,11 @@ async def process_video_async(
         logger.error(f"❌ [Task {task_id}] {error_msg}")
         logger.error(traceback.format_exc())
 
-        tasks_storage[task_id] = {
+        task_storage.update(task_id, {
             "status": "failed",
             "progress": 0,
             "error": error_msg,
-            "created_at": tasks_storage[task_id].get("created_at", datetime.now().isoformat()),
+            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
             "completed_at": datetime.now().isoformat()
         }
 
@@ -2181,12 +2182,11 @@ async def api_generate_async(
         task_id = str(uuid4())
 
         # Initialize task status
-        tasks_storage[task_id] = {
+        task_storage.create(task_id, {
             "status": "pending",
             "progress": 0,
-            "message": "Task queued, starting soon...",
-            "created_at": datetime.now().isoformat()
-        }
+            "message": "Task queued, starting soon..."
+        })
 
         video_path = None
 
@@ -2198,33 +2198,31 @@ async def api_generate_async(
             upload_result = await upload_video(video, extract_frames=False, num_frames=num_frames)
 
             if not upload_result.success:
-                tasks_storage[task_id] = {
-                    "status": "failed",
-                    "progress": 0,
-                    "error": upload_result.error,
-                    "created_at": tasks_storage[task_id]["created_at"],
-                    "completed_at": datetime.now().isoformat()
-                }
+                task_storage.fail(task_id, upload_result.error)
                 raise HTTPException(status_code=500, detail=upload_result.error)
 
             video_path = Path(upload_result.video_path)
             logger.info(f"✅ [Task {task_id}] Video uploaded: {video_path.name}")
 
-        # Add background task
-        background_tasks.add_task(
-            process_video_async,
-            task_id=task_id,
-            video_path=video_path,
-            google_drive_url=google_drive_url,
-            title=title,
-            subtitle=subtitle,
-            num_characters=num_characters,
-            num_frames=num_frames,
-            text_style=text_style,
-            layout_type=layout_type,
-            custom_positions=custom_positions,
-            preset_id=preset_id  # 🎨 Add preset support
+        # Start worker process (separate from API server)
+        worker = Process(
+            target=worker_process,
+            args=(
+                task_id,
+                str(video_path) if video_path else None,
+                google_drive_url,
+                title,
+                subtitle,
+                num_characters,
+                num_frames,
+                text_style,
+                layout_type,
+                custom_positions,
+                preset_id
+            ),
+            daemon=True
         )
+        worker.start()
 
         logger.info(f"🚀 [Task {task_id}] Background task started")
 
@@ -2266,7 +2264,7 @@ async def get_task_status(task_id: str):
             detail=f"Task '{task_id}' not found. It may have expired or never existed."
         )
 
-    task_info = tasks_storage[task_id]
+    task_info = task_storage.get(task_id)
 
     return JSONResponse({
         "task_id": task_id,
