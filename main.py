@@ -1597,7 +1597,8 @@ async def api_generate(
     num_frames: int = Form(150),
     text_style: str = Form("style1"),
     layout_type: Optional[str] = Form(None),
-    custom_positions: Optional[str] = Form(None)
+    custom_positions: Optional[str] = Form(None),
+    preset_id: Optional[str] = Form("1")  # 🎨 Preset: 1=ครึ่งตัว(top), 2=เต็มตัว(bottom)
 ):
     """
     🎬 Universal API: Generate thumbnail from video file OR Google Drive URL
@@ -1735,6 +1736,27 @@ async def api_generate(
         max_retries = 1
         retry_count = 0
 
+        # 🎨 Apply preset configuration
+        vertical_align = "top"  # Default
+        if preset_id and preset_id in PRESETS:
+            preset = PRESETS[preset_id]
+            crop_point = preset.get("crop_point", "waist")
+            crop_multiplier = CROP_MULTIPLIERS.get(crop_point, 3.5)
+            vertical_align = preset.get("vertical_align", "top")
+
+            # Temporarily modify crop settings
+            original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+            settings.CHARACTER_CROP_HEIGHT_MULTIPLIER = crop_multiplier
+
+            logger.info(f"🎨 Applied preset '{preset['name']}' (ID: {preset_id})")
+            logger.info(f"   └─ Crop: {crop_point} (multiplier: {crop_multiplier})")
+            logger.info(f"   └─ Vertical align: {vertical_align}")
+        else:
+            # Use default if preset not found
+            original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+            if preset_id and preset_id not in PRESETS:
+                logger.warning(f"⚠️  Preset ID '{preset_id}' not found, using default")
+
         while retry_count <= max_retries:
             try:
                 # 🎯 บังคับ layout เป็น tri ถ้าไม่ได้ระบุ
@@ -1750,7 +1772,8 @@ async def api_generate(
                     source_folder=None,
                     text_style=text_style,
                     layout_type=layout_type,
-                    custom_positions=parsed_positions
+                    custom_positions=parsed_positions,
+                    vertical_align=vertical_align  # 🎨 Use preset vertical alignment
                 )
 
                 if result['success']:
@@ -1809,6 +1832,11 @@ async def api_generate(
     except Exception as e:
         logger.error(f"API Generate failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # 🔄 Restore original crop multiplier
+        if 'original_crop_multiplier' in locals():
+            settings.CHARACTER_CROP_HEIGHT_MULTIPLIER = original_crop_multiplier
+            logger.debug(f"🔄 Restored crop multiplier to {original_crop_multiplier}")
 
 
 # ============================================================================
