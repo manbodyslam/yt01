@@ -54,8 +54,8 @@ class VideoExtractorV2:
         self.output_dir = output_dir or settings.RAW_DIR
         self.max_frames = max_frames or settings.VIDEO_MAX_FRAMES
         self.min_sharpness = min_sharpness or settings.VIDEO_MIN_SHARPNESS
-        # 🔧 Reduced workers to prevent FFmpeg h264 codec conflicts
-        self.num_workers = num_workers or min(4, max(2, cpu_count() // 2))  # Max 4 workers
+        # 🔧 Parallel workers for faster extraction
+        self.num_workers = num_workers or min(7, max(2, cpu_count() // 2))  # Max 7 workers (faster!)
         self.batch_size = batch_size  # 🆕 Batch size for streaming
 
         self.supported_formats = settings.VIDEO_FORMATS

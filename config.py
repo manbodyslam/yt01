@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     VIDEO_BATCH_SIZE: int = 50  # Process frames in batches (lower = less RAM, higher = faster)
 
     # 🆕 Scene-based Sampling (improve diversity +20-30% quality!)
-    VIDEO_FRAME_SIMILARITY_THRESHOLD: float = 0.85  # Skip frames >85% similar (0.0=different, 1.0=identical)
+    VIDEO_FRAME_SIMILARITY_THRESHOLD: float = 0.0  # ⚡ DISABLED for speed (0.0=disabled, 0.85=strict)
 
     # 🎯 Smart Frame Selection (แก้ปัญหาตาหลับที่ต้นเหตุ!)
     ENABLE_SMART_FRAME_SELECTION: bool = True  # เปิด/ปิด Smart Frame Selection
