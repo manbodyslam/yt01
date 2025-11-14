@@ -563,11 +563,11 @@ class LayoutEngine:
         # Move text up by 0.75% from bottom (1080 * 0.0075 = 8.1 ≈ 8 pixels) - ลดอีก 50%
         move_up_offset = int(self.height * 0.0075)  # 8 pixels (ลดจาก 16 pixels)
 
-        # Subtitle is at the very bottom (moved up by 1.5%, then down by 50px)
-        subtitle_y = self.height - bottom_margin - settings.SUBTITLE_FONT_SIZE - move_up_offset + 50
+        # Subtitle is at the very bottom (moved up by 1.5%, then down by 120px = 50+70)
+        subtitle_y = self.height - bottom_margin - settings.SUBTITLE_FONT_SIZE - move_up_offset + 120
 
-        # Title is above subtitle (ขยับลงมา 40px: จาก -30 → +10, ปรับขึ้น 100px จาก +110)
-        title_y = subtitle_y - settings.TITLE_FONT_SIZE + 10
+        # Title is above subtitle (ขยับลงมา 110px: เพิ่มจาก +10 → +80, รวม +70px)
+        title_y = subtitle_y - settings.TITLE_FONT_SIZE + 80
 
         title_placement = TextPlacement(
             text_type="title",

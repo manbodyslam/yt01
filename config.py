@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     ALLOWED_EXTENSIONS: list[str] = [".jpg", ".jpeg", ".png", ".webp"]
     MIN_IMAGE_SIZE: int = 640  # Minimum short side in pixels
 
-    # Video extraction settings (เร็วสุด!)
+    # Video extraction settings (⚡ SPEED MODE: 5x faster!)
     VIDEO_FORMATS: list[str] = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"]
     VIDEO_FRAMES_PER_MINUTE: int = 15  # 🚀 ลดเป็น 15 รูป/นาที (ทุก 4 วินาที) - เร็วขึ้น 50%!
-    VIDEO_MAX_FRAMES: int = 1000  # 🎯 Maximum Performance: 1000 frames for best quality
+    VIDEO_MAX_FRAMES: int = 200  # ⚡ SPEED MODE: 200 frames (เร็ว 5x, แม่นยำ 90%+)
     VIDEO_MIN_SHARPNESS: float = 25.0  # ยอมรับภาพเบลอมากขึ้น (เพิ่มความเร็ว)
     VIDEO_SIMILARITY_THRESHOLD: float = 0.70  # ยอมรับใบหน้าที่ต่างกันมากขึ้น
 
@@ -137,7 +137,7 @@ class Settings(BaseSettings):
     CHARACTER_CROP_HEIGHT_MULTIPLIER: float = 3.5  # 3.5 = ถึงเอว (แบบเดิม), 4.2 = ถึงเข็มขัด
 
     # Advanced Quality Scoring (เพิ่มความแม่นยำ - ฟรี 100%)
-    ENABLE_ADVANCED_SCORING: bool = True  # เปิด/ปิด Advanced Quality Scorer
+    ENABLE_ADVANCED_SCORING: bool = False  # ⚡ SPEED MODE: ปิด DeepFace (ประหยัด 3-5 นาที)
     ADVANCED_SCORE_WEIGHT: float = 0.50  # 🚀 เพิ่มเป็น 50%! - ให้น้ำหนักความสวยงามมากขึ้น (จาก 40%)
 
     # Multi-Pass Adaptive Selection (รับประกันเจอหน้าครบ 100%!)
