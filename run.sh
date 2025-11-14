@@ -3,15 +3,19 @@
 echo "Starting YouTube Thumbnail Generator..."
 echo ""
 
-# Check if venv exists
-if [ ! -d "venv" ]; then
+# Check if venv exists (.venv or venv)
+if [ -d ".venv" ]; then
+    VENV_DIR=".venv"
+elif [ -d "venv" ]; then
+    VENV_DIR="venv"
+else
     echo "❌ Virtual environment not found!"
     echo "กรุณารัน: ./setup.sh ก่อน"
     exit 1
 fi
 
 # Activate venv
-source venv/bin/activate
+source "$VENV_DIR/bin/activate"
 
 # Check if dependencies are installed
 if ! python -c "import fastapi" 2>/dev/null; then
