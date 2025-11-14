@@ -958,6 +958,7 @@ async def stream_progress(job_id: str):
 
         # Stream progress updates
         last_progress = -1
+        last_heartbeat = time.time()  # 🆕 Track last heartbeat time
         while True:
             job = progress_tracker.get_job(job_id)
 
@@ -980,6 +981,16 @@ async def stream_progress(job_id: str):
                     })
                 }
                 last_progress = job["progress"]
+                last_heartbeat = time.time()  # Reset heartbeat on progress update
+
+            # 🆕 Send heartbeat every 30 seconds to prevent timeout
+            current_time = time.time()
+            if current_time - last_heartbeat >= 30:
+                yield {
+                    "event": "heartbeat",
+                    "data": json.dumps({"timestamp": current_time})
+                }
+                last_heartbeat = current_time
 
             # Check if completed
             if job.get("status") in ["completed", "failed"]:

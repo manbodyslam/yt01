@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Video extraction settings (⚡ SPEED MODE: 5x faster!)
     VIDEO_FORMATS: list[str] = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"]
     VIDEO_FRAMES_PER_MINUTE: int = 15  # 🚀 ลดเป็น 15 รูป/นาที (ทุก 4 วินาที) - เร็วขึ้น 50%!
-    VIDEO_MAX_FRAMES: int = 200  # ⚡ SPEED MODE: 200 frames (เร็ว 5x, แม่นยำ 90%+)
+    VIDEO_MAX_FRAMES: int = 100  # ⚡ ULTRA SPEED MODE: 100 frames (เร็ว 10x, แม่นยำ 85%+)
     VIDEO_MIN_SHARPNESS: float = 25.0  # ยอมรับภาพเบลอมากขึ้น (เพิ่มความเร็ว)
     VIDEO_SIMILARITY_THRESHOLD: float = 0.70  # ยอมรับใบหน้าที่ต่างกันมากขึ้น
 
