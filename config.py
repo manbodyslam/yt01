@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Video extraction settings (เร็วสุด!)
     VIDEO_FORMATS: list[str] = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv"]
     VIDEO_FRAMES_PER_MINUTE: int = 15  # 🚀 ลดเป็น 15 รูป/นาที (ทุก 4 วินาที) - เร็วขึ้น 50%!
-    VIDEO_MAX_FRAMES: int = 250  # 🚀 Phase 2: ลดเป็น 250 เพื่อลด RAM (~500 MB)
+    VIDEO_MAX_FRAMES: int = 1000  # 🎯 Maximum Performance: 1000 frames for best quality
     VIDEO_MIN_SHARPNESS: float = 25.0  # ยอมรับภาพเบลอมากขึ้น (เพิ่มความเร็ว)
     VIDEO_SIMILARITY_THRESHOLD: float = 0.70  # ยอมรับใบหน้าที่ต่างกันมากขึ้น
 
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     OUTPUT_QUALITY: int = 95
 
     # Face detection settings (ปรับให้ตรวจจับได้มากขึ้น!)
-    FACE_DETECTION_MODEL: str = "buffalo_s"  # 🚀 Phase 1: เปลี่ยนเป็น buffalo_s (เล็กกว่า, เร็วกว่า)
+    FACE_DETECTION_MODEL: str = "buffalo_l"  # 🎯 Maximum Accuracy: buffalo_l (larger, more accurate)
     FACE_CONFIDENCE_THRESHOLD: float = 0.30  # 🚀🚀🚀 ลดเป็น 0.30 - ตรวจจับหน้าได้ง่ายที่สุด! (จาก 0.35)
     MIN_FACE_SIZE: int = 35  # 🚀🚀🚀 ลดเป็น 35 pixels - ยอมรับหน้าเล็กมากๆ (จาก 40)
 

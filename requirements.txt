@@ -13,10 +13,10 @@ opencv-python>=4.10.0
 opencv-contrib-python>=4.10.0
 Pillow>=11.0.0
 
-# DeepFace for Emotion Detection (DISABLED to save RAM ~1.5-2 GB)
-# deepface==0.0.95
-# tf-keras==2.20.1
-# tensorflow==2.20.0
+# DeepFace for Emotion Detection
+deepface==0.0.95
+tf-keras==2.20.1
+tensorflow==2.20.0
 
 # Machine Learning & Clustering
 numpy>=1.26.0,<3.0.0
