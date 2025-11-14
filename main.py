@@ -1844,7 +1844,7 @@ async def api_generate(
 # ASYNC API ENDPOINTS (to prevent Cloudflare timeout)
 # ============================================================================
 
-def worker_process(
+async def worker_process_async(
     task_id: str,
     video_path: Optional[Path],
     google_drive_url: Optional[str],
@@ -1858,7 +1858,7 @@ def worker_process(
     preset_id: Optional[str] = "1"  # 🎨 Add preset support
 ):
     """
-    Background task to process video and generate thumbnail
+    Async background task to process video and generate thumbnail
 
     This function runs in the background and updates task status in tasks_storage
     """
@@ -1872,7 +1872,7 @@ def worker_process(
                 "progress": 10,
                 "message": f"Downloading video from Google Drive...",
                 "created_at": datetime.now().isoformat()
-            }
+            })
 
             # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1893,7 +1893,7 @@ def worker_process(
                     "error": error,
                     "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
                     "completed_at": datetime.now().isoformat()
-                }
+                })
                 return
 
             logger.info(f"✅ [Task {task_id}] Downloaded: {video_path.name}")
@@ -1904,7 +1904,7 @@ def worker_process(
             "progress": 30,
             "message": f"Extracting frames from video (target: {num_frames} frames)...",
             "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-        }
+        })
 
         # Extract frames
         extractor = VideoExtractor(
@@ -1920,7 +1920,7 @@ def worker_process(
             "progress": 50,
             "message": f"Detecting faces in {len(extracted_frames)} frames...",
             "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-        }
+        })
 
         # Ingest frames
         pipeline.ingestor.images = []
@@ -1942,7 +1942,7 @@ def worker_process(
             "progress": 70,
             "message": f"Clustering faces and selecting best {num_characters} characters...",
             "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-        }
+        })
 
         # Import custom exception
         from utils.exceptions import InsufficientCharactersError
@@ -1987,7 +1987,7 @@ def worker_process(
                     "progress": 85,
                     "message": f"Generating thumbnail with layout '{layout_type}'...",
                     "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-                }
+                })
 
                 # Generate thumbnail
                 result = pipeline.generate(
@@ -2015,7 +2015,7 @@ def worker_process(
                         },
                         "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
                         "completed_at": datetime.now().isoformat()
-                    }
+                    })
                     logger.info(f"✅ [Task {task_id}] Completed: {result['filename']}")
                     return
                 else:
@@ -2037,7 +2037,7 @@ def worker_process(
                         "error": error_msg,
                         "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
                         "completed_at": datetime.now().isoformat()
-                    }
+                    })
                     logger.error(f"❌ [Task {task_id}] {error_msg}")
                     return
 
@@ -2048,7 +2048,7 @@ def worker_process(
                     "progress": 35,
                     "message": f"Retrying: extracting more frames (attempt {retry_count + 1}/{max_retries + 1})...",
                     "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-                }
+                })
 
                 # Extract additional frames
                 additional_target = 2000
@@ -2068,7 +2068,44 @@ def worker_process(
             "error": error_msg,
             "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
             "completed_at": datetime.now().isoformat()
-        }
+        })
+
+
+def worker_process(
+    task_id: str,
+    video_path: Optional[str],
+    google_drive_url: Optional[str],
+    title: str,
+    subtitle: Optional[str],
+    num_characters: int,
+    num_frames: int,
+    text_style: str,
+    layout_type: Optional[str],
+    custom_positions: Optional[str],
+    preset_id: Optional[str] = "1"
+):
+    """
+    Sync wrapper for worker_process_async (for multiprocessing.Process)
+    """
+    import asyncio
+
+    # Convert video_path string back to Path
+    video_path_obj = Path(video_path) if video_path else None
+
+    # Run async function in new event loop
+    asyncio.run(worker_process_async(
+        task_id=task_id,
+        video_path=video_path_obj,
+        google_drive_url=google_drive_url,
+        title=title,
+        subtitle=subtitle,
+        num_characters=num_characters,
+        num_frames=num_frames,
+        text_style=text_style,
+        layout_type=layout_type,
+        custom_positions=custom_positions,
+        preset_id=preset_id
+    ))
 
 
 @app.post("/api/generate-async", tags=["api"])
