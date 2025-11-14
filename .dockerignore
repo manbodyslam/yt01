@@ -1,0 +1,74 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Workspace (runtime data - will be created in container)
+workspace/raw/*
+workspace/temp/*
+workspace/out/*
+workspace/videos/*
+!workspace/raw/.gitkeep
+!workspace/temp/.gitkeep
+!workspace/out/.gitkeep
+!workspace/videos/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+.env.local
+
+# Documentation (not needed in container)
+*.md
+!README.md
+note.txt
+
+# Test files
+test_*.py
+temp_*.py
+tests/
+pytest_cache/
+
+# Railway/Deployment files (not needed in container)
+.railwayignore
+Procfile
+nixpacks.toml
+
+# Docker files (don't copy into image)
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Claude
+.claude/

@@ -782,6 +782,98 @@ async def health():
     )
 
 
+@app.get("/health/detailed")
+async def health_detailed():
+    """Detailed health check with dependency status"""
+    import sys
+    import platform
+    from datetime import datetime
+
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "YouTube Thumbnail Generator",
+        "version": "2.0.0",
+        "environment": {
+            "python_version": sys.version,
+            "platform": platform.platform(),
+            "processor": platform.processor(),
+        },
+        "dependencies": {}
+    }
+
+    # Check OpenAI
+    try:
+        import openai
+        openai_key = os.getenv("OPENAI_API_KEY")
+        health_status["dependencies"]["openai"] = {
+            "available": True,
+            "api_key_configured": bool(openai_key),
+            "version": openai.__version__
+        }
+    except Exception as e:
+        health_status["dependencies"]["openai"] = {
+            "available": False,
+            "error": str(e)
+        }
+
+    # Check Gemini
+    try:
+        import google.generativeai as genai
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        health_status["dependencies"]["gemini"] = {
+            "available": True,
+            "api_key_configured": bool(gemini_key)
+        }
+    except Exception as e:
+        health_status["dependencies"]["gemini"] = {
+            "available": False,
+            "error": str(e)
+        }
+
+    # Check InsightFace
+    try:
+        import insightface
+        health_status["dependencies"]["insightface"] = {
+            "available": True,
+            "version": insightface.__version__
+        }
+    except Exception as e:
+        health_status["dependencies"]["insightface"] = {
+            "available": False,
+            "error": str(e)
+        }
+
+    # Check OpenCV
+    try:
+        import cv2
+        health_status["dependencies"]["opencv"] = {
+            "available": True,
+            "version": cv2.__version__
+        }
+    except Exception as e:
+        health_status["dependencies"]["opencv"] = {
+            "available": False,
+            "error": str(e)
+        }
+
+    # Check ffmpeg
+    import subprocess
+    try:
+        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+        health_status["dependencies"]["ffmpeg"] = {
+            "available": result.returncode == 0,
+            "version": result.stdout.split('\n')[0] if result.returncode == 0 else None
+        }
+    except Exception as e:
+        health_status["dependencies"]["ffmpeg"] = {
+            "available": False,
+            "error": str(e)
+        }
+
+    return health_status
+
+
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_thumbnail(request: GenerateRequest):
     """

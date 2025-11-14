@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yt-thumbnail-generator
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+      # Optional: Add your API keys here or use .env file
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # - GOOGLE_DRIVE_ENABLED=false
+    volumes:
+      # Mount workspace for persistent data
+      - ./workspace/raw:/app/workspace/raw
+      - ./workspace/temp:/app/workspace/temp
+      - ./workspace/out:/app/workspace/out
+      - ./workspace/videos:/app/workspace/videos
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+# Optional: Use external .env file
+# Create .env file in project root with your keys:
+# OPENAI_API_KEY=sk-...
+# GEMINI_API_KEY=...
