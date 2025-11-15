@@ -2090,9 +2090,9 @@ async def worker_process_async(
 
                     # ปรับ layout ตามจำนวนคน
                     if found_people == 1:
-                        layout_type = "single_center"
+                        layout_type = "solo_focus"
                     elif found_people == 2:
-                        layout_type = "dual_side"
+                        layout_type = "duo_focus"
                     # ถ้า 3 คนใช้ layout เดิม
 
                     logger.info(f"✅ [Task {task_id}] ปรับเป็น {found_people} คน, layout: {layout_type}")
