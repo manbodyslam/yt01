@@ -317,8 +317,8 @@ class Renderer:
             eye_center_y_norm = eye_center_y * scale_factor
 
             # 3. Crop ด้วยระยะคงที่จากตา (ทุกคนเท่ากัน!)
-            TOP_MARGIN = 100      # จากตาไปด้านบน (ผม + หน้าผาก)
-            BOTTOM_MARGIN = 600   # จากตาไปด้านล่าง (จมูก + ปาก + คอ + ตัว)
+            TOP_MARGIN = 150      # จากตาไปด้านบน (ผม + หน้าผาก) - เพิ่มเพื่อไม่ให้หัวขาด!
+            BOTTOM_MARGIN = 550   # จากตาไปด้านล่าง (จมูก + ปาก + คอ + ตัว)
             SIDE_MARGIN = 150     # ซ้ายขวา
 
             crop_y1 = int(eye_center_y_norm - TOP_MARGIN)
@@ -326,11 +326,8 @@ class Renderer:
             crop_x1 = int(eye_center_x_norm - (TARGET_EYE_DISTANCE + SIDE_MARGIN))
             crop_x2 = int(eye_center_x_norm + (TARGET_EYE_DISTANCE + SIDE_MARGIN))
 
-            # 🎯 เก็บตำแหน่งตาใน crop (สำคัญมาก!)
-            eye_y_in_crop = eye_center_y_norm - crop_y1
-
             logger.info(f"      👁️  Eye-based crop: eye_distance={eye_distance:.1f}px → {TARGET_EYE_DISTANCE}px (scale={scale_factor:.2f}x)")
-            logger.info(f"      📐 Eye position in crop: {eye_y_in_crop:.1f}px from top")
+            logger.info(f"      📐 Crop before boundary: y1={crop_y1}, y2={crop_y2}")
 
         else:
             # Fallback: ไม่มี landmarks → ใช้ bbox (แบบเดิม)
@@ -345,18 +342,24 @@ class Renderer:
             crop_x1 = int(x1 - face_h * 0.5)
             crop_x2 = int(x2 + face_h * 0.5)
 
-            # ประมาณตำแหน่งตา (อยู่ที่ประมาณ 40% จากบนของหน้า)
-            estimated_eye_y = y1 + face_h * 0.4
-            eye_y_in_crop = estimated_eye_y - crop_y1
-
             logger.warning(f"      ⚠️  No landmarks - using bbox fallback")
-            logger.info(f"      📐 Estimated eye position in crop: {eye_y_in_crop:.1f}px from top")
+            logger.info(f"      📐 Crop before boundary: y1={crop_y1}, y2={crop_y2}")
 
         # 4. Boundary check (ป้องกันเกินขอบรูป)
         crop_x1 = max(0, crop_x1)
         crop_y1 = max(0, crop_y1)
         crop_x2 = min(normalized_img.width, crop_x2)
         crop_y2 = min(normalized_img.height, crop_y2)
+
+        # 🎯 คำนวณตำแหน่งตาใน crop หลัง boundary check! (สำคัญมาก!)
+        if kps is not None and len(kps) >= 2:
+            eye_y_in_crop = eye_center_y_norm - crop_y1
+            logger.info(f"      📐 Eye position in crop (after boundary): {eye_y_in_crop:.1f}px from top")
+        else:
+            # Fallback: ประมาณตำแหน่งตาหลัง boundary check
+            estimated_eye_y = y1 + face_h * 0.4
+            eye_y_in_crop = estimated_eye_y - crop_y1
+            logger.info(f"      📐 Estimated eye position in crop (after boundary): {eye_y_in_crop:.1f}px from top")
 
         # 5. Crop character
         character_img = normalized_img.crop((crop_x1, crop_y1, crop_x2, crop_y2))
@@ -413,13 +416,16 @@ class Renderer:
             # คำนวณตำแหน่งตาหลัง scale
             eye_y_scaled = eye_y_in_crop * (new_h / crop_height)
 
-            # กำหนดตำแหน่งตาที่ต้องการบนจอ
-            TARGET_EYE_Y = 180  # ตาทุกคนอยู่ที่ 180px จากบน!
+            # กำหนดตำแหน่งตาที่ต้องการบนจอ (เพิ่มจาก 180 → 360 เพื่อให้หัวไม่ขาด!)
+            TARGET_EYE_Y = 360  # ตาทุกคนอยู่ที่ 360px จากบน - เว้นพื้นที่ให้ผม+หน้าผาก!
 
             # คำนวณ paste_y ให้ตาอยู่ที่ TARGET_EYE_Y
             paste_y = int(TARGET_EYE_Y - eye_y_scaled)
 
+            # คำนวณตำแหน่งหัว (top of head)
+            head_top_y = paste_y
             logger.info(f"      👁️  Eye positioning: eye_y_in_crop={eye_y_in_crop:.1f}px → scaled={eye_y_scaled:.1f}px → final_y={TARGET_EYE_Y}px")
+            logger.info(f"      👤 Head top at: {head_top_y}px from canvas top (should be > 0!)")
 
         logger.info(
             f"      📍 Layout Position: X={placement.position.x}, Y={placement.position.y} | "
