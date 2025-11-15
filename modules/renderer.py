@@ -352,19 +352,28 @@ class Renderer:
         # 7. Crop Character โดยใช้พื้นที่ที่คำนวณแล้ว
         character_img = source_pil.crop((crop_x1, crop_y1, crop_x2, crop_y2))
 
+        # เก็บขนาด crop จริง (หลัง boundary check)
+        actual_crop_height = crop_y2 - crop_y1
+        actual_crop_width = crop_x2 - crop_x1
+
         # ======================================================================
-        # SIMPLE SCALING → ใช้ placement.scale โดยตรง!
+        # FACE-SIZE BASED SCALING → หน้าเท่ากันทุกคน 100%!
         # ======================================================================
-        # เป้าหมาย: ตัวละครขนาดเท่ากัน 100% (เพราะ crop area เท่ากันแล้ว!)
-        # วิธีการ: ขยายตาม placement.scale โดยตรง (ง่าย + ใช้งานได้!)
+        # เป้าหมาย: ให้หน้าทุกคนขนาดเท่ากันใน final image
+        # วิธีการ: Scale แต่ละคนให้ face_h เท่ากับ target_face_h
         # ======================================================================
 
-        # คำนวณ target size จาก placement.scale โดยตรง
-        target_h = int(self.height * placement.scale)
-        aspect_ratio = character_img.width / character_img.height
-        target_w = int(target_h * aspect_ratio)
+        # 1. คำนวณ target face height ที่ต้องการ (เท่ากันทุกคน)
+        target_face_h = avg_face_h * placement.scale if avg_face_h else face_h * placement.scale
 
-        # Resize โดยใช้ LANCZOS สำหรับคุณภาพสูง
+        # 2. คำนวณ scale_factor สำหรับแต่ละคน
+        scale_factor = target_face_h / face_h if face_h > 0 else 1.0
+
+        # 3. Resize crop area ด้วย scale_factor
+        target_h = int(actual_crop_height * scale_factor)
+        target_w = int(actual_crop_width * scale_factor)
+
+        # 4. Resize โดยใช้ LANCZOS สำหรับคุณภาพสูง
         character_img = character_img.resize((target_w, target_h), Image.LANCZOS)
 
         # อัพเดทขนาดจริงสำหรับใช้ในการวาง
