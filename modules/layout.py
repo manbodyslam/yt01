@@ -212,7 +212,7 @@ class LayoutEngine:
             Layout dictionary with character and text placements
         """
         num_chars = len(characters)
-        layout_type = self.select_layout(num_chars, layout_type)
+        layout_type = self.select_layout(num_chars, preferred_layout=layout_type)
 
         logger.info(f"Creating '{layout_type}' layout for {num_chars} character(s)")
 
