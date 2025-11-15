@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Streamin
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field, HttpUrl
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 from loguru import logger
 import sys
