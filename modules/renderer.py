@@ -466,15 +466,16 @@ class Renderer:
         w, h = size
         mask = Image.new('L', (w, h), 255)
 
-        # Create gradient edges - 15% (กลางๆ)
-        edge_width = int(min(w, h) * 0.15)  # 15% เพื่อสมดุลระหว่างนุ่มและคม
+        # Create gradient edges - 5% (น้อยกว่าเดิม - ไม่กินผม!)
+        edge_width = int(min(w, h) * 0.05)  # ลดจาก 15% → 5% เพื่อไม่กินผม
 
         for i in range(edge_width):
             # ใช้ steep curve - เบลอแค่ขอบสุดๆ
-            alpha = int(255 * ((i / edge_width) ** 3.5))  # เพิ่มเป็น 3.5 - เบลอแค่ขอบสุด
-            # Top
-            for x in range(w):
-                mask.putpixel((x, i), alpha)
+            alpha = int(255 * ((i / edge_width) ** 3.5))
+
+            # ❌ ไม่เบลอขอบบน! (ป้องกันกินผม)
+            # Top - SKIP
+
             # Bottom
             for x in range(w):
                 mask.putpixel((x, h - 1 - i), alpha)
@@ -485,8 +486,8 @@ class Renderer:
             for y in range(h):
                 mask.putpixel((w - 1 - i, y), min(mask.getpixel((w - 1 - i, y)), alpha))
 
-        # Apply blur to soften - 15px (กลางๆ)
-        blur_radius = 15  # 15px เพื่อสมดุลระหว่างนุ่มและคม
+        # Apply blur to soften - 5px (ลดจาก 15px)
+        blur_radius = 5  # ลดเพื่อไม่กินผม
         if blur_radius > 0:
             mask = mask.filter(ImageFilter.GaussianBlur(blur_radius))
 
