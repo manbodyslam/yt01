@@ -590,19 +590,25 @@ class ThumbnailPipeline:
                 logger.warning(f"⚠️ No frames extracted with max_frames={max_frames}")
                 continue
 
-            # Ingest frames and detect faces
-            face_count = self.ingestor.load_images_from_folder(settings.RAW_DIR)
-            if face_count == 0:
-                logger.warning(f"⚠️ No faces detected in {len(frames)} frames")
+            # Ingest frames
+            image_metadata_list = self.ingestor.ingest()
+            if not image_metadata_list:
+                logger.warning(f"⚠️ No images ingested from {len(frames)} frames")
                 continue
 
             # Process faces (detect, cluster)
-            self.face_service.ingest_from_folder(settings.RAW_DIR)
-            cluster_count = len(self.face_service.clusters)
+            cluster_count = self.face_service.analyze_all_images_adaptive(
+                image_metadata_list,
+                required_characters=required_people
+            )
+
+            if not self.face_service.face_db:
+                logger.warning(f"⚠️ No faces detected in {len(frames)} frames")
+                continue
 
             logger.info(
                 f"✅ Extracted {len(frames)} frames → "
-                f"detected {face_count} faces → "
+                f"detected {len(self.face_service.face_db)} faces → "
                 f"found {cluster_count} unique people"
             )
 
