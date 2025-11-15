@@ -2087,7 +2087,6 @@ async def worker_process_async(
 
                     # มีคน 1-2 คน → ใช้จำนวนที่หาได้ ไม่ fail
                     logger.warning(f"⚠️  [Task {task_id}] หาได้เพียง {found_people}/{REQUIRED_CHARACTERS} คน → ใช้ {found_people} คนไปก่อน")
-                    REQUIRED_CHARACTERS = found_people
 
                     # ปรับ layout ตามจำนวนคน
                     if found_people == 1:
@@ -2097,8 +2096,45 @@ async def worker_process_async(
                     # ถ้า 3 คนใช้ layout เดิม
 
                     logger.info(f"✅ [Task {task_id}] ปรับเป็น {found_people} คน, layout: {layout_type}")
-                    # ทำต่อ loop (generate ด้วยจำนวนคนที่หาได้)
-                    continue
+
+                    # Generate ทันทีด้วยจำนวนคนที่หาได้
+                    task_storage.update(task_id, {
+                        "status": "generating",
+                        "progress": 85,
+                        "message": f"Generating thumbnail with {found_people} characters...",
+                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
+                    })
+
+                    result = pipeline.generate(
+                        title=title,
+                        subtitle=subtitle,
+                        num_characters=found_people,  # ใช้จำนวนที่หาได้
+                        source_folder=None,
+                        text_style=text_style,
+                        layout_type=layout_type,
+                        custom_positions=parsed_positions,
+                        vertical_align=vertical_align
+                    )
+
+                    if result['success']:
+                        task_storage.update(task_id, {
+                            "status": "completed",
+                            "progress": 100,
+                            "message": "Thumbnail generated successfully!",
+                            "result": {
+                                "success": True,
+                                "thumbnail_path": result['thumbnail_path'],
+                                "filename": result['filename'],
+                                "metadata": result.get('metadata', {})
+                            },
+                            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
+                            "completed_at": datetime.now().isoformat()
+                        })
+                        logger.info(f"✅ [Task {task_id}] Completed with {found_people} characters: {result['filename']}")
+                        cleanup_workspace(task_id, video_path)
+                        return
+                    else:
+                        raise Exception(result.get('error', 'Unknown error'))
 
                 # Retry: เพิ่ม 50 frames
                 current_max_frames += 50
