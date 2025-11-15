@@ -279,77 +279,96 @@ class Renderer:
         source_pil = Image.fromarray(source_img)
 
         # ======================================================================
-        # SMART FACE-CENTERED CROPPING
+        # 🎯 LANDMARK-BASED NORMALIZATION - แม่นยำ 100%!
         # ======================================================================
-        # เป้าหมาย: ให้หน้าอยู่ตรงกลางของรูปที่ crop และไม่ถูกตัดทิ้ง
-        # วิธีการ: ใช้ face center เป็นจุดอ้างอิง แทนการใช้ bbox อย่างเดียว
+        # เป้าหมาย: ให้ตาทุกคนอยู่ระดับเดียวกัน + ตัวใหญ่เท่ากัน
+        # วิธีการ: ใช้ eye landmarks เป็นจุดอ้างอิง + normalize eye distance
         # ======================================================================
 
-        # 1. หา Face Bounding Box
+        import numpy as np
+
+        # 1. ดึง landmarks (keypoints)
+        kps = face_data.get('kps')
         bbox = face_data['bbox']
-        x1, y1, x2, y2 = map(int, bbox)
-        face_h = y2 - y1
-        face_w = x2 - x1
 
-        # 2. คำนวณจุดกึ่งกลางหน้า (Face Center)
-        #    ใช้เป็นจุดอ้างอิงหลักในการ crop
-        face_center_x = (x1 + x2) // 2
-        face_center_y = (y1 + y2) // 2
+        if kps is not None and len(kps) >= 2:
+            # มี landmarks → ใช้ตาเป็นจุดอ้างอิง (แม่นยำ!)
+            left_eye = kps[0]
+            right_eye = kps[1]
 
-        # 3. กำหนดขนาด Crop Area - ใช้แต่ละคนตามจริง!
-        #    - ความสูง: ให้เห็นหัว + หน้า + คอ + หน้าอก + ตัว
-        #    - ความกว้าง: ตามสัดส่วนหน้าของแต่ละคน
-        crop_height = int(face_h * settings.CHARACTER_CROP_HEIGHT_MULTIPLIER)
-        crop_width = int(face_h * 2.0)
+            # คำนวณตำแหน่งตากลาง
+            eye_center_x = (left_eye[0] + right_eye[0]) / 2
+            eye_center_y = (left_eye[1] + right_eye[1]) / 2
 
-        # 4. วาง Crop Area โดยให้หน้าอยู่ใน Upper-Center Zone
-        #    (ไม่ใช่ตรงกลางพอดี แต่เอาหน้าอยู่ด้านบนเล็กน้อย)
-        #    เหตุผล: เพื่อให้มีพื้นที่แสดงไหล่ อก และแขนด้านล่าง
-        #    FIX: ปรับ offset เป็น 0.38 เพื่อให้มีพื้นที่สำหรับผมด้านบนมากขึ้น (ไม่โดนตัด!)
-        crop_x1 = face_center_x - crop_width // 2  # หน้าอยู่ตรงกลางแนวนอน
-        crop_y1 = face_center_y - int(crop_height * 0.38)  # หน้าอยู่ด้านบน (38% จากบน - เพิ่มพื้นที่สำหรับผม!)
-        crop_x2 = crop_x1 + crop_width
-        crop_y2 = crop_y1 + crop_height
+            # คำนวณระยะห่างระหว่างตา (inter-eye distance)
+            eye_distance = np.linalg.norm(left_eye - right_eye)
 
-        # 5. ตรวจสอบขอบเขตรูปภาพ (Boundary Check)
-        #    ถ้า crop area เกินขอบรูป ให้ปรับตำแหน่ง
-        if crop_x1 < 0:
-            crop_x2 -= crop_x1
-            crop_x1 = 0
-        if crop_y1 < 0:
-            crop_y2 -= crop_y1
-            crop_y1 = 0
-        if crop_x2 > source_pil.width:
-            crop_x1 -= (crop_x2 - source_pil.width)
-            crop_x2 = source_pil.width
-        if crop_y2 > source_pil.height:
-            crop_y1 -= (crop_y2 - source_pil.height)
-            crop_y2 = source_pil.height
+            # 2. Normalize: กำหนดให้ตาห่างกัน TARGET_EYE_DISTANCE
+            TARGET_EYE_DISTANCE = 120  # คงที่! ทุกคนต้องได้ 120px
+            scale_factor = TARGET_EYE_DISTANCE / eye_distance if eye_distance > 0 else 1.0
 
-        # 6. ป้องกันค่าติดลบหลังจากปรับแล้ว
+            # Resize รูปทั้งหมดเพื่อ normalize eye distance
+            new_width = int(source_pil.width * scale_factor)
+            new_height = int(source_pil.height * scale_factor)
+            normalized_img = source_pil.resize((new_width, new_height), Image.LANCZOS)
+
+            # Update ตำแหน่งตาหลัง resize
+            eye_center_x_norm = eye_center_x * scale_factor
+            eye_center_y_norm = eye_center_y * scale_factor
+
+            # 3. Crop ด้วยระยะคงที่จากตา (ทุกคนเท่ากัน!)
+            TOP_MARGIN = 100      # จากตาไปด้านบน (ผม + หน้าผาก)
+            BOTTOM_MARGIN = 600   # จากตาไปด้านล่าง (จมูก + ปาก + คอ + ตัว)
+            SIDE_MARGIN = 150     # ซ้ายขวา
+
+            crop_y1 = int(eye_center_y_norm - TOP_MARGIN)
+            crop_y2 = int(eye_center_y_norm + BOTTOM_MARGIN)
+            crop_x1 = int(eye_center_x_norm - (TARGET_EYE_DISTANCE + SIDE_MARGIN))
+            crop_x2 = int(eye_center_x_norm + (TARGET_EYE_DISTANCE + SIDE_MARGIN))
+
+            logger.info(f"      👁️  Eye-based crop: eye_distance={eye_distance:.1f}px → {TARGET_EYE_DISTANCE}px (scale={scale_factor:.2f}x)")
+
+        else:
+            # Fallback: ไม่มี landmarks → ใช้ bbox (แบบเดิม)
+            x1, y1, x2, y2 = map(int, bbox)
+            face_h = y2 - y1
+
+            # ใช้ bbox เป็นจุดอ้างอิง
+            normalized_img = source_pil
+            crop_y1 = int(y1 - face_h * 0.3)
+            crop_y2 = int(y2 + face_h * 2.5)
+            crop_x1 = int(x1 - face_h * 0.5)
+            crop_x2 = int(x2 + face_h * 0.5)
+
+            logger.warning(f"      ⚠️  No landmarks - using bbox fallback")
+
+        # 4. Boundary check (ป้องกันเกินขอบรูป)
         crop_x1 = max(0, crop_x1)
         crop_y1 = max(0, crop_y1)
+        crop_x2 = min(normalized_img.width, crop_x2)
+        crop_y2 = min(normalized_img.height, crop_y2)
 
-        # 7. Crop Character โดยใช้พื้นที่ที่คำนวณแล้ว
-        character_img = source_pil.crop((crop_x1, crop_y1, crop_x2, crop_y2))
+        # 5. Crop character
+        character_img = normalized_img.crop((crop_x1, crop_y1, crop_x2, crop_y2))
+
+        logger.info(f"      ✂️  Cropped size: {character_img.width}x{character_img.height}px")
 
         # ======================================================================
-        # SIMPLE SCALING - ขยายตรงๆ ตาม placement.scale!
-        # ======================================================================
-        # ทุกคนขยายเท่ากัน → ง่าย ไม่ซับซ้อน!
+        # FINAL SCALING - ขยายตาม placement.scale
         # ======================================================================
 
-        # คำนวณ target size จาก placement.scale โดยตรง
+        # คำนวณ target size
         target_h = int(self.height * placement.scale)  # เช่น 1080 * 2.0 = 2160px
         aspect_ratio = character_img.width / character_img.height
         target_w = int(target_h * aspect_ratio)
 
-        # Resize โดยใช้ LANCZOS สำหรับคุณภาพสูง
+        # Resize
         character_img = character_img.resize((target_w, target_h), Image.LANCZOS)
 
-        # อัพเดทขนาดจริงสำหรับใช้ในการวาง
         new_w = target_w
         new_h = target_h
+
+        logger.info(f"      📐 Final size: {new_w}x{new_h}px (scale={placement.scale}x)")
 
         # ======================================================================
         # ADAPTIVE LIGHTING ADJUSTMENT
@@ -378,8 +397,8 @@ class Renderer:
             # ชิดขอบล่าง: ให้ส่วนล่างของตัวละครชิดขอบล่างของ canvas
             paste_y = canvas.height - new_h
         else:  # "top" (default)
-            # 🧪 TEST: ติด -100px เพื่อดูว่าขยับได้จริง
-            paste_y = -100
+            # หัวชิดบนตรงๆ (ตาทุกคนจะอยู่ที่ TOP_MARGIN * final_scale = 100*scale จากบน)
+            paste_y = 0
 
         logger.info(
             f"      📍 Layout Position: X={placement.position.x}, Y={placement.position.y} | "
