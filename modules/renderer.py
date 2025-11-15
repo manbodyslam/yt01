@@ -352,6 +352,9 @@ class Renderer:
         # 7. Crop Character โดยใช้พื้นที่ที่คำนวณแล้ว
         character_img = source_pil.crop((crop_x1, crop_y1, crop_x2, crop_y2))
 
+        # เก็บค่า crop ที่ใช้จริง (หลัง boundary check)
+        actual_crop_height = crop_y2 - crop_y1
+
         # ======================================================================
         # SIMPLE SCALING - ขยายตรงๆ ตาม placement.scale!
         # ======================================================================
@@ -359,7 +362,7 @@ class Renderer:
         # ======================================================================
 
         # คำนวณ target size จาก placement.scale โดยตรง
-        target_h = int(self.height * placement.scale)  # เช่น 1080 * 1.6 = 1728px
+        target_h = int(self.height * placement.scale)  # เช่น 1080 * 2.0 = 2160px
         aspect_ratio = character_img.width / character_img.height
         target_w = int(target_h * aspect_ratio)
 
@@ -385,10 +388,10 @@ class Renderer:
         mask = self._create_soft_edge_mask(character_img.size)
 
         # ======================================================================
-        # SIMPLE POSITIONING - วางชิดบนตรงๆ
+        # POSITIONING - หัวทุกคนอยู่ระดับเดียวกัน!
         # ======================================================================
         # แนวนอน (X): กึ่งกลางรูปตรงกับ placement position
-        # แนวตั้ง (Y): ห่างจากบน top_margin (เท่ากันทุกคน)
+        # แนวตั้ง (Y): คำนวณให้หัวทุกคนอยู่ที่ 40px จากบน
         # ======================================================================
         paste_x = placement.position.x - new_w // 2
 
@@ -397,9 +400,25 @@ class Renderer:
             # ชิดขอบล่าง: ให้ส่วนล่างของตัวละครชิดขอบล่างของ canvas
             paste_y = canvas.height - new_h
         else:  # "top" (default)
-            # แบบง่าย: วางห่างจากบน top_margin ตรงๆ (เท่ากันทุกคน)
-            top_margin = 40  # 🎯 หัวห่างจากบน 40px!
-            paste_y = top_margin
+            # คำนวณตำแหน่งหัวที่คาดหวัง จาก avg_face_h
+            # crop_y1 = face_center_y - crop_height * 0.38
+            # y1 (หัว) = face_center_y - avg_face_h/2
+            # head_top_in_crop = y1 - crop_y1 = crop_height * 0.38 - avg_face_h/2
+
+            if avg_face_h:
+                base_face_h = avg_face_h
+            else:
+                base_face_h = face_h
+
+            crop_height_calc = base_face_h * settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+            expected_head_top_in_crop = crop_height_calc * 0.38 - base_face_h / 2
+
+            # หลัง resize, scale ตาม
+            head_top_scaled = int(expected_head_top_in_crop * (new_h / actual_crop_height))
+
+            # วางให้หัวอยู่ที่ 40px จากบน
+            top_margin = 40
+            paste_y = top_margin - head_top_scaled
 
         logger.info(
             f"      📍 Layout Position: X={placement.position.x}, Y={placement.position.y} | "
