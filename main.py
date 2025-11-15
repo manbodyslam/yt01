@@ -2068,25 +2068,37 @@ async def worker_process_async(
                 retry_count += 1
 
                 if retry_count > max_retries:
-                    # Failed after retries
+                    # หาคนไม่ครบหลัง retry → ใช้จำนวนที่หาได้แทน (ไม่ fail)
                     found_people = e.found
-                    error_msg = (
-                        f"❌ ต้องการนักแสดง {REQUIRED_CHARACTERS} คน แต่พบเพียง {found_people} คนเท่านั้น!\n"
-                        f"📹 กรุณาอัพโหลดวิดีโอที่มีนักแสดงชัดเจนอย่างน้อย {REQUIRED_CHARACTERS} คน"
-                    )
-                    task_storage.update(task_id, {
-                        "status": "failed",
-                        "progress": 0,
-                        "error": error_msg,
-                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                        "completed_at": datetime.now().isoformat()
-                    })
-                    logger.error(f"❌ [Task {task_id}] {error_msg}")
 
-                    # 🧹 Clean up workspace after failure
-                    cleanup_workspace(task_id, video_path)
+                    if found_people == 0:
+                        # ถ้าไม่เจอเลย → fail
+                        error_msg = "❌ ไม่พบนักแสดงในวิดีโอ กรุณาอัพโหลดวิดีโอที่มีคนชัดเจน"
+                        task_storage.update(task_id, {
+                            "status": "failed",
+                            "progress": 0,
+                            "error": error_msg,
+                            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
+                            "completed_at": datetime.now().isoformat()
+                        })
+                        logger.error(f"❌ [Task {task_id}] {error_msg}")
+                        cleanup_workspace(task_id, video_path)
+                        return
 
-                    return
+                    # มีคน 1-2 คน → ใช้จำนวนที่หาได้ ไม่ fail
+                    logger.warning(f"⚠️  [Task {task_id}] หาได้เพียง {found_people}/{REQUIRED_CHARACTERS} คน → ใช้ {found_people} คนไปก่อน")
+                    REQUIRED_CHARACTERS = found_people
+
+                    # ปรับ layout ตามจำนวนคน
+                    if found_people == 1:
+                        layout_type = "single_center"
+                    elif found_people == 2:
+                        layout_type = "dual_side"
+                    # ถ้า 3 คนใช้ layout เดิม
+
+                    logger.info(f"✅ [Task {task_id}] ปรับเป็น {found_people} คน, layout: {layout_type}")
+                    # ทำต่อ loop (generate ด้วยจำนวนคนที่หาได้)
+                    continue
 
                 # Retry: เพิ่ม 50 frames
                 current_max_frames += 50
