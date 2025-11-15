@@ -444,35 +444,38 @@ class LayoutEngine:
         chars_list = list(characters.items())
 
         placements = [
-            # ตัวหลัก - HERO (ด้านหน้า กลางจอ ใหญ่มาก)
+            # ตัวหลัก - 1.2x ขนาดเท่ากัน (ตาระดับเดียวกัน)
             CharacterPlacement(
                 role=chars_list[0][0],
                 position=Position(
                     x=int(self.width * 0.50),  # ตรงกลางพอดี
-                    y=int(self.height * 0.28)  # ปรับให้หัวสูง 10% จากบน (ลดจาก 0.55 - เพราะ scale ใหญ่ที่สุด)
+                    y=0  # ใช้ TARGET_EYE_Y แทน
                 ),
-                scale=1.3,  # ใหญ่มาก - เป็นตัวเอก
-                z_index=12  # อยู่หน้าสุด
+                scale=1.2,  # เท่ากันทุกคน!
+                z_index=12,  # อยู่หน้าสุด
+                vertical_align="top"  # ใช้ eye-level positioning
             ),
-            # ตัวรองซ้าย (ด้านหลัง สูงขึ้น เล็กกว่า)
+            # ตัวรองซ้าย - 1.2x ขนาดเท่ากัน (ตาระดับเดียวกัน)
             CharacterPlacement(
                 role=chars_list[1][0],
                 position=Position(
                     x=int(self.width * 0.22),  # ซ้าย
-                    y=int(self.height * 0.25)  # ปรับให้หัวสูง 10% จากบน (ลดจาก 0.35)
+                    y=0  # ใช้ TARGET_EYE_Y แทน
                 ),
-                scale=0.75,  # เล็กกว่าตัวหลัก
-                z_index=8   # อยู่หลังตัวหลัก
+                scale=1.2,  # เท่ากันทุกคน!
+                z_index=8,   # อยู่หลังตัวหลัก
+                vertical_align="top"  # ใช้ eye-level positioning
             ),
-            # ตัวรองขวา (ด้านหลัง สูงขึ้น เล็กกว่า)
+            # ตัวรองขวา - 1.2x ขนาดเท่ากัน (ตาระดับเดียวกัน)
             CharacterPlacement(
                 role=chars_list[2][0],
                 position=Position(
                     x=int(self.width * 0.78),  # ขวา
-                    y=int(self.height * 0.25)  # ปรับให้หัวสูง 10% จากบน (เท่ากับซ้าย)
+                    y=0  # ใช้ TARGET_EYE_Y แทน
                 ),
-                scale=0.75,  # เล็กกว่าตัวหลัก
-                z_index=8   # อยู่หลังตัวหลัก
+                scale=1.2,  # เท่ากันทุกคน!
+                z_index=8,   # อยู่หลังตัวหลัก
+                vertical_align="top"  # ใช้ eye-level positioning
             )
         ]
 
