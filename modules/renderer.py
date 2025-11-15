@@ -291,11 +291,6 @@ class Renderer:
         kps = face_data.get('kps')
         bbox = face_data['bbox']
 
-        # 🔍 DEBUG: ตรวจสอบว่ามี landmarks หรือไม่
-        logger.info(f"      🔍 DEBUG: kps = {kps is not None}, bbox = {bbox}")
-        if kps is not None:
-            logger.info(f"      🔍 DEBUG: kps shape = {kps.shape if hasattr(kps, 'shape') else len(kps)}")
-
         if kps is not None and len(kps) >= 2:
             # มี landmarks → ใช้ตาเป็นจุดอ้างอิง (แม่นยำ!)
             left_eye = kps[0]
