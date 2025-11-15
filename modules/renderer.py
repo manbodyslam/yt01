@@ -226,6 +226,20 @@ class Renderer:
         logger.info(f"   Character roles available: {list(characters.keys())}")
         logger.info(f"   Layout has {len(layout['characters'])} placements")
 
+        # ============================================================
+        # 🎯 คำนวณ Average Face Height (สำคัญมาก!)
+        # ============================================================
+        # เพื่อให้ทุกคน crop area เท่ากัน → ตัวละครเท่ากัน 100%!
+        face_heights = []
+        for role, char_data in characters.items():
+            bbox = char_data['face_data']['bbox']
+            face_h = bbox[3] - bbox[1]
+            face_heights.append(face_h)
+
+        avg_face_h = sum(face_heights) / len(face_heights) if face_heights else 150
+        logger.info(f"📏 Average face height: {avg_face_h:.1f}px (from {len(face_heights)} faces)")
+        # ============================================================
+
         # Convert to PIL for easier compositing
         canvas_pil = Image.fromarray(canvas)
 
@@ -246,11 +260,12 @@ class Renderer:
 
             logger.info(f"   Placing character '{role}' at ({placement.position.x}, {placement.position.y}), scale={placement.scale}")
 
-            # Extract and place character
+            # Extract and place character (ส่ง avg_face_h ไปด้วย!)
             canvas_pil = self._place_character(
                 canvas_pil,
                 face_data,
-                placement
+                placement,
+                avg_face_h=avg_face_h  # 🆕 ส่งค่าเฉลี่ยไปด้วย
             )
             characters_placed += 1
 
@@ -261,7 +276,8 @@ class Renderer:
         self,
         canvas: Image.Image,
         face_data: Dict,
-        placement: CharacterPlacement
+        placement: CharacterPlacement,
+        avg_face_h: float = None
     ) -> Image.Image:
         """
         Extract face/upper body and place on canvas
@@ -270,6 +286,7 @@ class Renderer:
             canvas: Canvas PIL Image
             face_data: Face detection data
             placement: Character placement info
+            avg_face_h: Average face height (for uniform sizing)
 
         Returns:
             Updated canvas
@@ -299,9 +316,10 @@ class Renderer:
         # 3. กำหนดขนาด Crop Area
         #    - ความสูง: ให้เห็นหัว + หน้า + คอ + หน้าอก + ตัว (เกือบเต็มตัว)
         #    - ความกว้าง: ใช้ค่าเท่ากันทุกคน (2.0x) เพื่อให้ aspect ratio เท่ากัน
-        # 🎯 ใช้ค่าจาก config (3.5 = เอว) - ปรับใน config.py เพื่อ revert ได้ง่าย!
-        crop_height = int(face_h * settings.CHARACTER_CROP_HEIGHT_MULTIPLIER)
-        crop_width = int(face_h * 2.0)  # ใช้ค่าเท่ากันทุกคน (ไม่แยก center/side)
+        # 🎯 ใช้ avg_face_h เพื่อให้ทุกคน crop area เท่ากัน 100%!
+        base_face_h = avg_face_h if avg_face_h else face_h
+        crop_height = int(base_face_h * settings.CHARACTER_CROP_HEIGHT_MULTIPLIER)
+        crop_width = int(base_face_h * 2.0)  # ใช้ค่าเท่ากันทุกคน (ไม่แยก center/side)
 
         # 4. วาง Crop Area โดยให้หน้าอยู่ใน Upper-Center Zone
         #    (ไม่ใช่ตรงกลางพอดี แต่เอาหน้าอยู่ด้านบนเล็กน้อย)
@@ -335,33 +353,21 @@ class Renderer:
         character_img = source_pil.crop((crop_x1, crop_y1, crop_x2, crop_y2))
 
         # ======================================================================
-        # FACE-SIZE BASED SCALING → ตัวละครขนาดเท่ากัน 100%!
+        # SIMPLE SCALING → ใช้ placement.scale โดยตรง!
         # ======================================================================
-        # เป้าหมาย: ให้ face ของทุกคนมีขนาดเท่ากันในภาพ final
-        # วิธีการ: คำนวณ target face height → scale crop area ให้ face ตรงเป้าหมาย
+        # เป้าหมาย: ตัวละครขนาดเท่ากัน 100% (เพราะ crop area เท่ากันแล้ว!)
+        # วิธีการ: ขยายตาม placement.scale โดยตรง (ง่าย + ใช้งานได้!)
         # ======================================================================
 
-        # 1. คำนวณ target face height ที่ต้องการในภาพ final
-        #    ตัวอย่าง: placement.scale=1.15, multiplier=3.5
-        #    → target_face_h = (1080 * 1.15) / 3.5 = 355px
-        target_face_h = (self.height * placement.scale) / settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+        # คำนวณ target size จาก placement.scale โดยตรง
+        target_h = int(self.height * placement.scale)
+        aspect_ratio = character_img.width / character_img.height
+        target_w = int(target_h * aspect_ratio)
 
-        # 2. คำนวณ scale factor สำหรับแต่ละคน
-        #    ตัวอย่าง: face_h=100 → scale=355/100=3.55x (ขยาย)
-        #             face_h=300 → scale=355/300=1.18x (ลด)
-        scale_factor = target_face_h / face_h if face_h > 0 else 1.0
-
-        # 3. Resize crop area ด้วย scale factor
-        #    ทุกคนจะได้ face ขนาดเท่ากัน (355px)
-        original_crop_height = crop_y2 - crop_y1
-        original_crop_width = crop_x2 - crop_x1
-        target_h = int(original_crop_height * scale_factor)
-        target_w = int(original_crop_width * scale_factor)
-
-        # 4. Resize โดยใช้ LANCZOS สำหรับคุณภาพสูง
+        # Resize โดยใช้ LANCZOS สำหรับคุณภาพสูง
         character_img = character_img.resize((target_w, target_h), Image.LANCZOS)
 
-        # 4. อัพเดทขนาดจริงสำหรับใช้ในการวาง
+        # อัพเดทขนาดจริงสำหรับใช้ในการวาง
         new_w = target_w
         new_h = target_h
 
@@ -403,8 +409,8 @@ class Renderer:
             # ชิดขอบล่าง: ให้ส่วนล่างของตัวละครชิดขอบล่างของ canvas
             paste_y = canvas.height - new_h
         else:  # "top" (default)
-            # แบบเดิม: หัวห่างจากขอบบนตาม top_margin (นับจากหัวจริงๆ)
-            top_margin = 85  # แบบที่ 6: หัวห่างจากขอบบน 85px
+            # หัวชิดบน: หัวห่างจากขอบบนเพียง 20px (นับจากหัวจริงๆ)
+            top_margin = 20  # 🎯 ตามที่ user ต้องการ: หัวชิดบน 20px!
             paste_y = placement.position.y - head_top_scaled + top_margin
 
         logger.info(
