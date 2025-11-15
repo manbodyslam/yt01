@@ -140,13 +140,13 @@ class LayoutEngine:
 
         return Position(x=new_x, y=new_y)
 
-    def select_layout(self, num_characters: int, layout_type: str = None) -> str:
+    def select_layout(self, num_characters: int, preferred_layout: str = None) -> str:
         """
         Select layout based on number of characters
 
         Args:
             num_characters: Number of characters (1-4)
-            layout_type: Optional explicit layout type
+            preferred_layout: Optional explicit layout type
 
         Returns:
             Layout name that matches num_characters
@@ -171,14 +171,14 @@ class LayoutEngine:
         }
 
         # If explicit layout provided, validate it matches num_characters
-        if layout_type:
-            required_count = LAYOUT_REQUIREMENTS.get(layout_type)
+        if preferred_layout:
+            required_count = LAYOUT_REQUIREMENTS.get(preferred_layout)
             if required_count == num_characters:
-                logger.info(f"🎯 Using specified layout: {layout_type} (for {num_characters} character(s))")
-                return layout_type
+                logger.info(f"🎯 Using specified layout: {preferred_layout} (for {num_characters} character(s))")
+                return preferred_layout
             else:
                 logger.warning(
-                    f"⚠️ Layout mismatch: '{layout_type}' requires {required_count} chars "
+                    f"⚠️ Layout mismatch: '{preferred_layout}' requires {required_count} chars "
                     f"but have {num_characters} chars. Will select appropriate layout."
                 )
 
