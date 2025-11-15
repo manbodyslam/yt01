@@ -408,7 +408,7 @@ class Renderer:
             paste_y = canvas.height - new_h
         else:  # "top" (default)
             # แบบง่าย: วางห่างจากบน top_margin ตรงๆ (เท่ากันทุกคน)
-            top_margin = 20
+            top_margin = 40  # 🎯 หัวห่างจากบน 40px!
             paste_y = top_margin
 
         logger.info(
