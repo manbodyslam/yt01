@@ -1008,29 +1008,15 @@ class FaceService:
             # ไปหา cluster ถัดไป
             cluster_idx += 1
 
-        # 🔒 STRICT ENFORCEMENT: ต้องได้คนครบตามจำนวนที่ต้องการเท่านั้น!
+        # ✅ ADAPTIVE: Return ตามจำนวนที่หาได้ (ไม่ raise error)
         if selected_count < num_characters:
-            if allow_duplicates:
-                # ⚠️ FALLBACK MODE: ยอมรับจำนวนคนที่หาได้ (แม้ไม่ครบ)
-                logger.warning(
-                    f"⚠️  Found only {selected_count}/{num_characters} different people, "
-                    f"but ALLOW_DUPLICATES=True - accepting result as fallback"
-                )
-            else:
-                # Raise exception เพื่อ trigger retry logic
-                error_msg = (
-                    f"Found only {selected_count}/{num_characters} different people. "
-                    f"Need to extract more frames from video."
-                )
-                logger.warning(f"⚠️  {error_msg}")
-                from utils.exceptions import InsufficientCharactersError
-                raise InsufficientCharactersError(
-                    found=selected_count,
-                    required=num_characters,
-                    message=error_msg
-                )
+            logger.warning(
+                f"⚠️  Found only {selected_count}/{num_characters} different people. "
+                f"Returning {selected_count} character(s) (adaptive strategy)"
+            )
+        else:
+            logger.info(f"✅ Successfully selected {selected_count} different characters (required: {num_characters})")
 
-        logger.info(f"✅ Successfully selected {selected_count} different characters (required: {num_characters})")
         return selected_characters
 
     def _select_best_face_from_cluster(

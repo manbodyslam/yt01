@@ -479,12 +479,164 @@ class ThumbnailPipeline:
 
         logger.info("Thumbnail Pipeline initialized")
 
+    def _adaptive_character_selection(self, desired_counts: List[int]) -> Dict[str, Dict]:
+        """
+        🎯 ADAPTIVE STRATEGY: Try to select characters with progressive fallback
+
+        Strategy:
+        - Try desired_counts in order (e.g., [3, 2, 1])
+        - Return first successful result
+        - Never raise error
+
+        Args:
+            desired_counts: List of character counts to try (e.g., [3, 2, 1])
+
+        Returns:
+            Characters dict (1-4 คน ตามที่หาได้) or {} if no characters
+        """
+        for count in desired_counts:
+            logger.info(f"🎯 Attempting to select {count} character(s)...")
+
+            # Call select_characters (ไม่ raise error แล้ว)
+            chars = self.face_service.select_characters(
+                num_characters=count,
+                allow_duplicates=True  # Always allow duplicates for fallback
+            )
+
+            if len(chars) >= 1:  # Success: ได้อย่างน้อย 1 คน
+                logger.info(
+                    f"✅ Selected {len(chars)} character(s) "
+                    f"(wanted {count}, got {len(chars)})"
+                )
+                return chars
+
+            logger.warning(f"⚠️ Cannot select {count} character(s), trying next fallback...")
+
+        # No characters found at all
+        logger.error("❌ No characters found after all fallback attempts")
+        return {}
+
+    def _clear_workspace(self):
+        """
+        🧹 Clear workspace before extraction
+
+        Clears:
+        - All frames in RAW_DIR
+        - Reset ingestor and face_service state
+        """
+        try:
+            # Delete all frames
+            if settings.RAW_DIR.exists():
+                deleted_frames = 0
+                for frame_file in settings.RAW_DIR.glob("*.jpg"):
+                    frame_file.unlink()
+                    deleted_frames += 1
+
+                if deleted_frames > 0:
+                    logger.info(f"🧹 Deleted {deleted_frames} old frame(s) from workspace")
+
+            # Reset state
+            self.ingestor.images = []
+            self.face_service.face_db = []
+            self.face_service.clusters = {}
+
+        except Exception as e:
+            logger.warning(f"⚠️ Workspace cleanup warning: {e}")
+
+    def _extract_with_retry(
+        self,
+        video_path: Path,
+        attempts: List[Tuple[int, int]]
+    ) -> Tuple[List[Path], int]:
+        """
+        🔄 PROGRESSIVE RETRY: Extract frames with increasing frame counts
+
+        Strategy:
+        - Try attempts in order (e.g., [(150, 3), (200, 3), (250, 2)])
+        - Each attempt: (max_frames, required_people)
+        - Clear workspace before each attempt
+        - Quick validation: check cluster count after extraction
+        - Return best result
+
+        Args:
+            video_path: Path to video file
+            attempts: List of (max_frames, required_people) tuples
+
+        Returns:
+            (frames, cluster_count) - frames extracted and number of unique people found
+        """
+        last_frames = []
+        last_cluster_count = 0
+
+        for max_frames, required_people in attempts:
+            logger.info(
+                f"📹 Extracting {max_frames} frames "
+                f"(target: {required_people} people)..."
+            )
+
+            # Clear workspace before extraction
+            self._clear_workspace()
+
+            # Extract frames using VideoExtractor
+            from modules.video_extractor import VideoExtractor
+            extractor = VideoExtractor(
+                output_dir=settings.RAW_DIR,
+                max_frames=max_frames
+            )
+
+            frames = extractor.extract_from_video(video_path)
+
+            if not frames:
+                logger.warning(f"⚠️ No frames extracted with max_frames={max_frames}")
+                continue
+
+            # Ingest frames and detect faces
+            face_count = self.ingestor.load_images_from_folder(settings.RAW_DIR)
+            if face_count == 0:
+                logger.warning(f"⚠️ No faces detected in {len(frames)} frames")
+                continue
+
+            # Process faces (detect, cluster)
+            self.face_service.ingest_from_folder(settings.RAW_DIR)
+            cluster_count = len(self.face_service.clusters)
+
+            logger.info(
+                f"✅ Extracted {len(frames)} frames → "
+                f"detected {face_count} faces → "
+                f"found {cluster_count} unique people"
+            )
+
+            # Save last result
+            last_frames = frames
+            last_cluster_count = cluster_count
+
+            # Check if we have enough people
+            if cluster_count >= required_people:
+                logger.info(
+                    f"🎯 SUCCESS: Found {cluster_count} people "
+                    f"(required {required_people}) with {max_frames} frames"
+                )
+                return frames, cluster_count
+
+            logger.warning(
+                f"⚠️ Only {cluster_count}/{required_people} people "
+                f"with {max_frames} frames, trying next attempt..."
+            )
+
+        # Return last attempt result (may not meet requirements)
+        logger.warning(
+            f"⚠️ Completed all extraction attempts. "
+            f"Best result: {last_cluster_count} people from {len(last_frames)} frames"
+        )
+        return last_frames, last_cluster_count
+
     def generate(
         self,
         title: str,
         subtitle: Optional[str] = None,
         num_characters: int = 3,
         source_folder: Optional[Path] = None,
+        video_path: Optional[Path] = None,
         text_style: str = "style1",
         layout_type: Optional[str] = None,
         custom_positions: Optional[List[Dict]] = None,
@@ -493,82 +645,128 @@ class ThumbnailPipeline:
         vertical_align: str = "top"
     ) -> dict:
         """
-        Run complete thumbnail generation pipeline
+        🎯 ADAPTIVE PIPELINE: Generate thumbnail with fail-safe strategy
+
+        Strategy:
+        - Video: Extract frames progressively (150 → 200 → 250)
+        - Folder: Use existing images
+        - Character selection: Adaptive (3 → 2 → 1)
+        - Layout: Auto-select based on actual character count
+        - NEVER raise error (return success/error dict)
 
         Args:
             title: Title text
             subtitle: Subtitle text
-            num_characters: Number of characters to include
-            source_folder: Source image folder
-            text_style: Text style preset (style1, style2, style3, auto)
-            allow_duplicates: If True, allow selecting same person multiple times (last resort fallback)
+            num_characters: Desired number of characters (will adapt if not enough)
+            source_folder: Source image folder (for folder mode)
+            video_path: Video file path (for video mode)
+            text_style: Text style preset
+            layout_type: Optional preferred layout
+            vertical_align: Character vertical alignment
 
         Returns:
-            Result dictionary
+            {"success": True, "thumbnail_path": ..., "metadata": ...} OR
+            {"success": False, "error": "..."}
         """
         # Start timing
         start_time = time.time()
         start_datetime = datetime.now()
 
         try:
-            logger.info(f"Starting thumbnail generation: '{title}'")
+            logger.info(f"🎬 Starting ADAPTIVE thumbnail generation: '{title}'")
 
-            # AI DISABLED - Use fixed defaults
-            ai_suggestions = {
-                'layout_type': 'tri_hero',  # ใช้ tri_hero เป็นค่าเริ่มต้น
-                'text_style': 'style1',
-                'mood': 'neutral'
-            }
-            logger.info(f"🎨 Using fixed layout: tri_hero (AI disabled)")
+            # ==================== MODE DETECTION ====================
+            is_video_mode = (video_path is not None)
+            is_folder_mode = (source_folder is not None)
+
+            if not is_video_mode and not is_folder_mode:
+                return {
+                    "success": False,
+                    "error": "FATAL: Must provide either video_path or source_folder"
+                }
 
             # Use default text style
             if text_style == "auto":
                 text_style = "style1"
-                logger.info(f"   Using default text style: {text_style}")
 
-            # 2. Ingest images
-            if source_folder:
-                self.ingestor.source_dir = Path(source_folder)
+            # ==================== VIDEO MODE: Extract Frames ====================
+            if is_video_mode:
+                logger.info(f"📹 VIDEO MODE: Extracting frames from {video_path.name}")
 
-            image_metadata_list = self.ingestor.ingest()
-
-            if not image_metadata_list:
-                raise ValueError("No valid images found in source folder")
-
-            logger.info(f"Ingested {len(image_metadata_list)} images")
-
-            # 2. Analyze faces with Multi-Pass Adaptive System
-            # 🎯 รับประกันเจอหน้าครบ 100%!
-            num_clusters_found = self.face_service.analyze_all_images_adaptive(
-                image_metadata_list,
-                required_characters=num_characters
-            )
-
-            if not self.face_service.face_db:
-                raise ValueError("No faces detected in any images")
-
-            # เช็คว่าเจอคนครบหรือเปล่า
-            if num_clusters_found < num_characters:
-                # ถ้า Multi-Pass ลองทุกวิธีแล้วยังไม่ครบ → throw error
-                from utils.exceptions import InsufficientCharactersError
-                raise InsufficientCharactersError(
-                    found=num_clusters_found,
-                    required=num_characters,
-                    message=f"Found only {num_clusters_found}/{num_characters} different people. "
-                            f"Multi-pass adaptive system tried all thresholds but still insufficient."
+                # Progressive extraction: 150 → 200 → 250 frames
+                frames, cluster_count = self._extract_with_retry(
+                    video_path=video_path,
+                    attempts=[
+                        (150, 3),  # Try 150 frames, need 3 people
+                        (200, 3),  # Try 200 frames, need 3 people
+                        (250, 2),  # Try 250 frames, need 2 people (relaxed)
+                    ]
                 )
 
-            # 3. Select characters
-            characters = self.face_service.select_characters(num_characters, allow_duplicates=allow_duplicates, randomize=randomize)
+                if not frames:
+                    return {
+                        "success": False,
+                        "error": "FATAL: Cannot extract frames from video"
+                    }
+
+                if cluster_count == 0:
+                    return {
+                        "success": False,
+                        "error": "FATAL: No faces detected in video frames"
+                    }
+
+                logger.info(f"✅ Video extraction complete: {len(frames)} frames, {cluster_count} unique people")
+
+                # Prepare image_metadata_list from extracted frames
+                image_metadata_list = self.ingestor.ingest()
+
+            # ==================== FOLDER MODE: Load Images ====================
+            else:
+                logger.info(f"📂 FOLDER MODE: Loading images from {source_folder}")
+
+                self.ingestor.source_dir = Path(source_folder)
+                image_metadata_list = self.ingestor.ingest()
+
+                if not image_metadata_list:
+                    return {
+                        "success": False,
+                        "error": "FATAL: No valid images found in source folder"
+                    }
+
+                logger.info(f"✅ Ingested {len(image_metadata_list)} images")
+
+                # Analyze faces
+                num_clusters_found = self.face_service.analyze_all_images_adaptive(
+                    image_metadata_list,
+                    required_characters=num_characters
+                )
+
+                if not self.face_service.face_db:
+                    return {
+                        "success": False,
+                        "error": "FATAL: No faces detected in any images"
+                    }
+
+                logger.info(f"✅ Face analysis complete: {num_clusters_found} unique people")
+
+            # ==================== ADAPTIVE CHARACTER SELECTION ====================
+            logger.info(f"🎯 ADAPTIVE: Selecting characters (desired: {num_characters}, will adapt if needed)...")
+
+            # Try to select characters: 3 → 2 → 1 (adaptive fallback)
+            characters = self._adaptive_character_selection(
+                desired_counts=[num_characters, 2, 1] if num_characters == 3 else [num_characters, 1]
+            )
 
             if not characters:
-                raise ValueError("Could not select characters (no clusters found)")
+                return {
+                    "success": False,
+                    "error": "FATAL: Cannot select any characters (no faces found)"
+                }
 
-            logger.info(f"Selected {len(characters)} characters")
+            logger.info(f"✅ Selected {len(characters)} character(s)")
 
-            # 5. Score images and select background
+            # ==================== SELECT BACKGROUND ====================
             # Exclude ALL images with faces (not just selected characters)
-            # เลือกเฉพาะเฟรมที่ไม่มีหน้าคนเลย สำหรับพื้นหลังที่เบลอ
             all_face_image_paths = {face['image_path'] for face in self.face_service.get_all_faces()}
             background_image = self.scorer.select_background_image(
                 image_metadata_list,
@@ -579,67 +777,27 @@ class ThumbnailPipeline:
                 # Fall back to any image
                 background_image = image_metadata_list[0]
 
-            logger.info(f"Selected background: {background_image['filename']}")
+            logger.info(f"✅ Selected background: {background_image['filename']}")
 
-            # 6. Extract color palette
+            # ==================== EXTRACT COLOR PALETTE ====================
             palette = self.palette_extractor.extract_palette(background_image['path'])
             colors = self.palette_extractor.select_text_colors(palette)
             mood = self.palette_extractor.analyze_mood(palette)
 
-            logger.info(f"Extracted palette: {palette[:3]}... (mood: {mood})")
+            logger.info(f"✅ Extracted palette (mood: {mood})")
 
-            # 7. Determine final layout (user override > AI suggestion > fallback)
+            # ==================== AUTO-SELECT LAYOUT ====================
             actual_char_count = len(characters)
 
-            # If user specified layout, use it; otherwise use AI suggestion
-            if layout_type:
-                suggested_layout = layout_type
-                logger.info(f"🎨 Using user-specified layout: {layout_type}")
-            else:
-                suggested_layout = ai_suggestions['layout_type']
-                logger.info(f"🤖 Using AI-suggested layout: {suggested_layout}")
+            # Use LayoutEngine.select_layout (auto-validate and fallback)
+            final_layout = self.layout_engine.select_layout(
+                num_characters=actual_char_count,
+                preferred_layout=layout_type  # May be None or user-specified
+            )
 
-            # Layout requirements mapping
-            layout_requirements = {
-                'solo_focus': 1,
-                'duo_focus': 2,
-                'duo_diagonal': 2,
-                'tri_hero': 3,
-                'tri_pyramid': 3,
-                'tri_staggered': 3,
-                'quad_lineup': 4
-            }
+            logger.info(f"✅ Layout selected: {final_layout} (for {actual_char_count} character(s))")
 
-            # Validate layout matches character count
-            if suggested_layout in layout_requirements:
-                required_count = layout_requirements[suggested_layout]
-                if actual_char_count != required_count:
-                    # Fallback to appropriate layout based on actual count
-                    fallback_layouts = {
-                        1: 'solo_focus',
-                        2: 'duo_focus',
-                        3: 'tri_hero',
-                        4: 'quad_lineup'
-                    }
-                    final_layout = fallback_layouts.get(actual_char_count, 'solo_focus')
-                    logger.warning(
-                        f"Layout mismatch: '{suggested_layout}' (needs {required_count} chars) "
-                        f"but only have {actual_char_count} chars. Falling back to '{final_layout}'"
-                    )
-                else:
-                    final_layout = suggested_layout
-            else:
-                # Unknown layout, use safe fallback
-                fallback_layouts = {
-                    1: 'solo_focus',
-                    2: 'duo_focus',
-                    3: 'tri_hero',
-                    4: 'quad_lineup'
-                }
-                final_layout = fallback_layouts.get(actual_char_count, 'solo_focus')
-                logger.warning(f"Unknown layout '{suggested_layout}', falling back to '{final_layout}'")
-
-            # Create layout with validated layout type and custom positions
+            # ==================== CREATE LAYOUT ====================
             layout = self.layout_engine.create_layout(
                 characters=characters,
                 layout_type=final_layout,
@@ -648,11 +806,6 @@ class ThumbnailPipeline:
                 title=title,
                 subtitle=subtitle
             )
-
-            if final_layout == suggested_layout:
-                logger.info(f"Created layout: {layout['type']} (AI suggested)")
-            else:
-                logger.info(f"Created layout: {layout['type']} (fallback from AI suggestion '{suggested_layout}')")
 
             # 8. Render thumbnail
             thumbnail = self.renderer.create_thumbnail(
@@ -672,11 +825,16 @@ class ThumbnailPipeline:
             # 10. Export with proper naming
             final_path = self.exporter.save(temp_path, title)
 
-            # Prepare metadata
+            # ==================== PREPARE METADATA ====================
             metadata = {
                 'title': title,
                 'subtitle': subtitle,
-                'num_characters': len(characters),
+                'mode': 'video' if is_video_mode else 'folder',
+                'num_characters': {
+                    'requested': num_characters,
+                    'actual': len(characters),
+                    'adaptive': (len(characters) != num_characters)
+                },
                 'layout_type': layout['type'],
                 'text_style': text_style,
                 'background_image': str(background_image['filename']),
@@ -690,7 +848,6 @@ class ThumbnailPipeline:
                 },
                 'palette': palette,
                 'mood': mood,
-                'ai_suggestions': ai_suggestions,
             }
 
             logger.info(f"✓ Thumbnail generated successfully: {final_path}")
@@ -797,16 +954,10 @@ class ThumbnailPipeline:
             }
 
         except Exception as e:
-            # ⚠️ IMPORTANT: Let InsufficientCharactersError propagate to generate_from_video
-            from utils.exceptions import InsufficientCharactersError
-            if isinstance(e, InsufficientCharactersError):
-                # Re-raise ให้ generate_from_video จัดการ (Smart Fallback)
-                raise
-
-            # For other exceptions, return error dict
+            # ✅ ADAPTIVE: Never raise error, always return error dict
             import traceback
             error_trace = traceback.format_exc()
-            logger.error(f"Pipeline failed: {e}")
+            logger.error(f"❌ Pipeline failed: {e}")
             logger.error(f"Full traceback:\n{error_trace}")
             return {
                 'success': False,
@@ -1892,25 +2043,32 @@ async def worker_process_async(
     text_style: str,
     layout_type: Optional[str],
     custom_positions: Optional[str],
-    preset_id: Optional[str] = "1"  # 🎨 Add preset support
+    preset_id: Optional[str] = "1"
 ):
     """
-    Async background task to process video and generate thumbnail
+    ✅ SIMPLIFIED Worker: Process video and generate thumbnail
 
-    This function runs in the background and updates task status in tasks_storage
+    Responsibilities:
+    - Download video (if Google Drive URL)
+    - Update task status
+    - Call Pipeline.generate() with video_path (Pipeline handles ALL retry/fallback)
+    - Handle result (success/error)
+    - Cleanup workspace
+
+    All adaptive logic (retry, fallback, character selection) is handled by Pipeline!
     """
     try:
-        logger.info(f"🔄 [Task {task_id}] Starting background processing...")
+        logger.info(f"🚀 [Task {task_id}] Starting SIMPLIFIED worker process...")
 
-        # 🧹 Clean up workspace before starting (prevent using old images)
+        # 🧹 Clean workspace before starting
         cleanup_workspace(task_id, None)
 
-        # Update status: downloading (if from Google Drive)
+        # ==================== DOWNLOAD VIDEO (if Google Drive) ====================
         if google_drive_url:
             task_storage.update(task_id, {
                 "status": "downloading",
                 "progress": 10,
-                "message": f"Downloading video from Google Drive...",
+                "message": "Downloading video from Google Drive...",
                 "created_at": datetime.now().isoformat()
             })
 
@@ -1919,7 +2077,7 @@ async def worker_process_async(
             video_filename = f"gdrive_{timestamp}.mp4"
             video_path = settings.WORKSPACE_DIR / "videos" / video_filename
 
-            # Download from Google Drive
+            # Download
             success, error = await download_from_google_drive_direct(
                 url=google_drive_url,
                 destination=video_path,
@@ -1927,46 +2085,19 @@ async def worker_process_async(
             )
 
             if not success:
-                task_storage.update(task_id, {
-                    "status": "failed",
-                    "progress": 0,
-                    "error": error,
-                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                    "completed_at": datetime.now().isoformat()
-                })
+                task_storage.fail(task_id, f"Download failed: {error}")
+                cleanup_workspace(task_id, None)
                 return
 
             logger.info(f"✅ [Task {task_id}] Downloaded: {video_path.name}")
 
-        # Update status: extracting frames
-        task_storage.update(task_id, {
-            "status": "extracting_frames",
-            "progress": 30,
-            "message": f"Extracting frames from video (target: {num_frames} frames)...",
-            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-        })
+        # ==================== VALIDATE VIDEO PATH ====================
+        if not video_path or not video_path.exists():
+            task_storage.fail(task_id, "FATAL: Video file not found")
+            cleanup_workspace(task_id, video_path)
+            return
 
-        # Extract frames
-        extractor = VideoExtractor(
-            output_dir=settings.RAW_DIR,
-            max_frames=settings.VIDEO_MAX_FRAMES
-        )
-        extracted_frames = extractor.extract_from_video(video_path)
-        logger.info(f"✅ [Task {task_id}] Extracted {len(extracted_frames)} frames")
-
-        # Update status: detecting faces
-        task_storage.update(task_id, {
-            "status": "detecting_faces",
-            "progress": 50,
-            "message": f"Detecting faces in {len(extracted_frames)} frames...",
-            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-        })
-
-        # Ingest frames
-        pipeline.ingestor.images = []
-        pipeline.ingestor.ingest()
-        logger.info(f"✅ [Task {task_id}] Ingested {len(pipeline.ingestor.images)} frames")
-
+        # ==================== PARSE PARAMETERS ====================
         # Parse custom_positions
         parsed_positions = None
         if custom_positions:
@@ -1974,28 +2105,12 @@ async def worker_process_async(
                 import json
                 parsed_positions = json.loads(custom_positions)
             except json.JSONDecodeError as e:
-                logger.warning(f"[Task {task_id}] Failed to parse custom_positions: {e}")
-
-        # Update status: clustering characters
-        task_storage.update(task_id, {
-            "status": "clustering",
-            "progress": 70,
-            "message": f"Clustering faces and selecting best {num_characters} characters...",
-            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-        })
-
-        # Import custom exception
-        from utils.exceptions import InsufficientCharactersError
-
-        # Force tri layout
-        REQUIRED_CHARACTERS = 3
-        TRI_LAYOUTS = ["tri_hero", "tri_pyramid", "tri_staggered"]
-
-        if not layout_type or layout_type not in TRI_LAYOUTS:
-            layout_type = "tri_hero"
+                logger.warning(f"[Task {task_id}] Invalid custom_positions: {e}")
 
         # 🎨 Apply preset configuration
         vertical_align = "top"  # Default
+        original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
+
         if preset_id and preset_id in PRESETS:
             preset = PRESETS[preset_id]
             crop_point = preset.get("crop_point", "waist")
@@ -2003,180 +2118,75 @@ async def worker_process_async(
             vertical_align = preset.get("vertical_align", "top")
 
             # Temporarily modify crop settings
-            original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
             settings.CHARACTER_CROP_HEIGHT_MULTIPLIER = crop_multiplier
 
             logger.info(f"🎨 [Task {task_id}] Applied preset '{preset['name']}' (ID: {preset_id})")
-            logger.info(f"   └─ Crop: {crop_point} (multiplier: {crop_multiplier})")
-            logger.info(f"   └─ Vertical align: {vertical_align}")
         else:
-            # Use default if preset not found
-            original_crop_multiplier = settings.CHARACTER_CROP_HEIGHT_MULTIPLIER
             if preset_id and preset_id not in PRESETS:
-                logger.warning(f"⚠️  [Task {task_id}] Preset ID '{preset_id}' not found, using default")
+                logger.warning(f"⚠️ [Task {task_id}] Preset ID '{preset_id}' not found, using default")
 
-        # Retry logic (เพิ่ม 50 frames ถ้าหาคนไม่ครบ)
-        max_retries = 1
-        retry_count = 0
-        current_max_frames = settings.VIDEO_MAX_FRAMES  # 150
+        # ==================== CALL PIPELINE (ADAPTIVE!) ====================
+        logger.info(f"🎯 [Task {task_id}] Calling ADAPTIVE pipeline...")
 
-        while retry_count <= max_retries:
-            try:
-                # Update status: generating thumbnail
-                task_storage.update(task_id, {
-                    "status": "generating",
-                    "progress": 85,
-                    "message": f"Generating thumbnail with layout '{layout_type}'...",
-                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-                })
+        task_storage.update(task_id, {
+            "status": "processing",
+            "progress": 30,
+            "message": "Processing video (adaptive extraction + character selection)...",
+            "created_at": datetime.now().isoformat()
+        })
 
-                # Generate thumbnail
-                result = pipeline.generate(
-                    title=title,
-                    subtitle=subtitle,
-                    num_characters=REQUIRED_CHARACTERS,
-                    source_folder=None,
-                    text_style=text_style,
-                    layout_type=layout_type,
-                    custom_positions=parsed_positions,
-                    vertical_align=vertical_align  # 🎨 Use preset vertical alignment
-                )
+        # 🔥 Pipeline.generate() handles EVERYTHING:
+        # - Progressive frame extraction (150 → 200 → 250)
+        # - Adaptive character selection (3 → 2 → 1)
+        # - Auto layout selection
+        # - NEVER raises error (returns success/error dict)
+        result = pipeline.generate(
+            title=title,
+            subtitle=subtitle,
+            num_characters=num_characters,  # Desired count (Pipeline will adapt)
+            video_path=video_path,  # 🆕 NEW: Pass video_path directly!
+            source_folder=None,
+            text_style=text_style,
+            layout_type=layout_type,  # Preferred layout (Pipeline will validate)
+            custom_positions=parsed_positions,
+            vertical_align=vertical_align
+        )
 
-                if result['success']:
-                    # Success!
-                    task_storage.update(task_id, {
-                        "status": "completed",
-                        "progress": 100,
-                        "message": "Thumbnail generated successfully!",
-                        "result": {
-                            "success": True,
-                            "thumbnail_path": result['thumbnail_path'],
-                            "filename": result['filename'],
-                            "metadata": result.get('metadata', {})
-                        },
-                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                        "completed_at": datetime.now().isoformat()
-                    })
-                    logger.info(f"✅ [Task {task_id}] Completed: {result['filename']}")
+        # ==================== HANDLE RESULT ====================
+        if result['success']:
+            # ✅ SUCCESS
+            task_storage.complete(task_id, {
+                "success": True,
+                "thumbnail_path": result['thumbnail_path'],
+                "filename": result['filename'],
+                "metadata": result.get('metadata', {})
+            })
+            logger.info(f"✅ [Task {task_id}] Completed successfully: {result['filename']}")
 
-                    # 🧹 Clean up workspace after success
-                    cleanup_workspace(task_id, video_path)
+        else:
+            # ❌ FATAL ERROR (Pipeline tried everything)
+            task_storage.fail(task_id, result.get('error', 'Unknown error'))
+            logger.error(f"❌ [Task {task_id}] Failed: {result.get('error')}")
 
-                    return
-                else:
-                    raise Exception(result.get('error', 'Unknown error'))
+        # 🧹 Cleanup workspace
+        cleanup_workspace(task_id, video_path)
 
-            except InsufficientCharactersError as e:
-                retry_count += 1
-
-                if retry_count > max_retries:
-                    # หาคนไม่ครบหลัง retry → ใช้จำนวนที่หาได้แทน (ไม่ fail)
-                    found_people = e.found
-
-                    if found_people == 0:
-                        # ถ้าไม่เจอเลย → fail
-                        error_msg = "❌ ไม่พบนักแสดงในวิดีโอ กรุณาอัพโหลดวิดีโอที่มีคนชัดเจน"
-                        task_storage.update(task_id, {
-                            "status": "failed",
-                            "progress": 0,
-                            "error": error_msg,
-                            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                            "completed_at": datetime.now().isoformat()
-                        })
-                        logger.error(f"❌ [Task {task_id}] {error_msg}")
-                        cleanup_workspace(task_id, video_path)
-                        return
-
-                    # มีคน 1-2 คน → ใช้จำนวนที่หาได้ ไม่ fail
-                    logger.warning(f"⚠️  [Task {task_id}] หาได้เพียง {found_people}/{REQUIRED_CHARACTERS} คน → ใช้ {found_people} คนไปก่อน")
-
-                    # ปรับ layout ตามจำนวนคน
-                    if found_people == 1:
-                        layout_type = "solo_focus"
-                    elif found_people == 2:
-                        layout_type = "duo_focus"
-                    # ถ้า 3 คนใช้ layout เดิม
-
-                    logger.info(f"✅ [Task {task_id}] ปรับเป็น {found_people} คน, layout: {layout_type}")
-
-                    # Generate ทันทีด้วยจำนวนคนที่หาได้
-                    task_storage.update(task_id, {
-                        "status": "generating",
-                        "progress": 85,
-                        "message": f"Generating thumbnail with {found_people} characters...",
-                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-                    })
-
-                    result = pipeline.generate(
-                        title=title,
-                        subtitle=subtitle,
-                        num_characters=found_people,  # ใช้จำนวนที่หาได้
-                        source_folder=None,
-                        text_style=text_style,
-                        layout_type=layout_type,
-                        custom_positions=parsed_positions,
-                        vertical_align=vertical_align,
-                        allow_duplicates=True  # 🔥 ยอมรับคนซ้ำถ้าหาไม่พอ
-                    )
-
-                    if result['success']:
-                        task_storage.update(task_id, {
-                            "status": "completed",
-                            "progress": 100,
-                            "message": "Thumbnail generated successfully!",
-                            "result": {
-                                "success": True,
-                                "thumbnail_path": result['thumbnail_path'],
-                                "filename": result['filename'],
-                                "metadata": result.get('metadata', {})
-                            },
-                            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                            "completed_at": datetime.now().isoformat()
-                        })
-                        logger.info(f"✅ [Task {task_id}] Completed with {found_people} characters: {result['filename']}")
-                        cleanup_workspace(task_id, video_path)
-                        return
-                    else:
-                        raise Exception(result.get('error', 'Unknown error'))
-
-                # Retry: เพิ่ม 50 frames
-                current_max_frames += 50
-                logger.warning(f"⚠️  [Task {task_id}] Retry {retry_count}/{max_retries}: extracting {current_max_frames} frames (เพิ่ม +50)...")
-                task_storage.update(task_id, {
-                    "status": "extracting_frames",
-                    "progress": 35,
-                    "message": f"Retrying: extracting {current_max_frames} frames (เพิ่ม +50)...",
-                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-                })
-
-                # Clear old frames first
-                cleanup_workspace(task_id, None)
-
-                # สร้าง extractor ใหม่ด้วย max_frames ที่เพิ่มขึ้น
-                extractor_retry = VideoExtractor(
-                    output_dir=settings.RAW_DIR,
-                    max_frames=current_max_frames
-                )
-                additional_frames = extractor_retry.extract_from_video(video_path)
-                pipeline.ingestor.ingest()
-                logger.info(f"🔄 [Task {task_id}] Retry: extracted {len(additional_frames)} frames (target: {current_max_frames})")
+        # 🔄 Restore crop multiplier
+        settings.CHARACTER_CROP_HEIGHT_MULTIPLIER = original_crop_multiplier
 
     except Exception as e:
-        # Unexpected error
-        error_msg = f"Error processing video: {str(e)}"
+        # 💥 UNEXPECTED ERROR
+        import traceback
+        error_msg = f"Unexpected error: {str(e)}"
         logger.error(f"❌ [Task {task_id}] {error_msg}")
         logger.error(traceback.format_exc())
 
-        task_storage.update(task_id, {
-            "status": "failed",
-            "progress": 0,
-            "error": error_msg,
-            "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-            "completed_at": datetime.now().isoformat()
-        })
+        task_storage.fail(task_id, error_msg)
+        cleanup_workspace(task_id, video_path if 'video_path' in locals() else None)
 
-        # 🧹 Clean up workspace after error
-        cleanup_workspace(task_id, video_path)
+        # Restore crop multiplier if exists
+        if 'original_crop_multiplier' in locals():
+            settings.CHARACTER_CROP_HEIGHT_MULTIPLIER = original_crop_multiplier
 
 
 def worker_process(
