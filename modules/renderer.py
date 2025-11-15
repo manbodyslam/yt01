@@ -378,8 +378,8 @@ class Renderer:
             # ชิดขอบล่าง: ให้ส่วนล่างของตัวละครชิดขอบล่างของ canvas
             paste_y = canvas.height - new_h
         else:  # "top" (default)
-            # หัวชิดบนตรงๆ - ง่ายที่สุด!
-            paste_y = 0
+            # 🧪 TEST: ติด -100px เพื่อดูว่าขยับได้จริง
+            paste_y = -100
 
         logger.info(
             f"      📍 Layout Position: X={placement.position.x}, Y={placement.position.y} | "
@@ -387,23 +387,9 @@ class Renderer:
             f"Vertical Align: {placement.vertical_align}"
         )
         logger.info(
-            f"      🎯 Calculated Paste: X={paste_x}, Y={paste_y} (before boundary check)"
+            f"      🎯 Final Paste Position: X={paste_x}, Y={paste_y} | "
+            f"Image covers: ({paste_x}, {paste_y}) to ({paste_x+new_w}, {paste_y+new_h})"
         )
-
-        # 2. ป้องกันรูปหลุดออกนอกเฟรม (Canvas Boundary Check)
-        #    นับจากหัวจริงๆ และอนุญาตให้หัวถูกตัดออกได้ (paste_y ติดลบได้)
-        paste_x = max(0, min(paste_x, canvas.width - new_w))
-        # อนุญาตให้หัวถูกตัดออก แต่ต้องมีอย่างน้อย 30% ของตัวละครในเฟรม
-        min_visible_height = int(new_h * 0.3)  # ต้องเห็นอย่างน้อย 30% ของตัวละคร
-        paste_y = max(-new_h + min_visible_height, min(paste_y, canvas.height - min_visible_height))
-
-        logger.info(
-            f"      ✅ Final Paste Position: X={paste_x}, Y={paste_y} "
-            f"(covers {paste_x} to {paste_x+new_w}, {paste_y} to {paste_y+new_h})"
-        )
-
-        # หมายเหตุ: การป้องกันนี้ทำให้หน้าอาจเบี่ยงเล็กน้อยจากตำแหน่งที่กำหนด
-        # แต่ดีกว่าหน้าถูกตัดทิ้ง
 
         # Add shadow/halo for all characters (intensity based on z-index)
         if placement.z_index >= 10:
