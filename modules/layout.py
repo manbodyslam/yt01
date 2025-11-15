@@ -273,7 +273,7 @@ class LayoutEngine:
                     x=int(self.width * 0.65),
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากับ layout อื่น
+                scale=1.0,  # เท่ากับ layout อื่น
                 z_index=10,
                 vertical_align="top"
             )
@@ -307,7 +307,7 @@ class LayoutEngine:
                     x=int(self.width * 0.25),  # ซ้าย 25% (เว้นพื้นที่กลาง)
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=10,
                 vertical_align="top"
             ),
@@ -318,7 +318,7 @@ class LayoutEngine:
                     x=int(self.width * 0.75),  # ขวา 75% (เว้นพื้นที่กลาง)
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=10,
                 vertical_align="top"
             )
@@ -356,7 +356,7 @@ class LayoutEngine:
                     x=int(self.width * 0.28),  # ซ้าย
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=11,
                 vertical_align="top"
             ),
@@ -367,7 +367,7 @@ class LayoutEngine:
                     x=int(self.width * 0.72),  # ขวา
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=9,
                 vertical_align="top"
             )
@@ -401,7 +401,7 @@ class LayoutEngine:
                     x=int(self.width * 0.21),  # ซ้าย 21%
                     y=0
                 ),
-                scale=1.2,
+                scale=1.0,
                 z_index=9,
                 vertical_align="top"
             ),
@@ -412,7 +412,7 @@ class LayoutEngine:
                     x=int(self.width * 0.50),  # ตรงกลาง 50%
                     y=0
                 ),
-                scale=1.2,
+                scale=1.0,
                 z_index=10,
                 vertical_align="top"
             ),
@@ -423,7 +423,7 @@ class LayoutEngine:
                     x=int(self.width * 0.79),  # ขวา 79%
                     y=0
                 ),
-                scale=1.2,
+                scale=1.0,
                 z_index=9,
                 vertical_align="top"
             )
@@ -457,7 +457,7 @@ class LayoutEngine:
                     x=int(self.width * 0.50),  # ตรงกลางพอดี
                     y=0  # ใช้ TARGET_EYE_Y แทน
                 ),
-                scale=1.2,  # เท่ากันทุกคน!
+                scale=1.0,  # เท่ากันทุกคน!
                 z_index=12,  # อยู่หน้าสุด
                 vertical_align="top"  # ใช้ eye-level positioning
             ),
@@ -468,7 +468,7 @@ class LayoutEngine:
                     x=int(self.width * 0.22),  # ซ้าย
                     y=0  # ใช้ TARGET_EYE_Y แทน
                 ),
-                scale=1.2,  # เท่ากันทุกคน!
+                scale=1.0,  # เท่ากันทุกคน!
                 z_index=8,   # อยู่หลังตัวหลัก
                 vertical_align="top"  # ใช้ eye-level positioning
             ),
@@ -479,7 +479,7 @@ class LayoutEngine:
                     x=int(self.width * 0.78),  # ขวา
                     y=0  # ใช้ TARGET_EYE_Y แทน
                 ),
-                scale=1.2,  # เท่ากันทุกคน!
+                scale=1.0,  # เท่ากันทุกคน!
                 z_index=8,   # อยู่หลังตัวหลัก
                 vertical_align="top"  # ใช้ eye-level positioning
             )
@@ -513,7 +513,7 @@ class LayoutEngine:
                     x=int(self.width * 0.18),  # ซ้ายสุด
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=9,
                 vertical_align="top"
             ),
@@ -524,7 +524,7 @@ class LayoutEngine:
                     x=int(self.width * 0.50),  # ตรงกลาง
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=11,
                 vertical_align="top"
             ),
@@ -535,7 +535,7 @@ class LayoutEngine:
                     x=int(self.width * 0.82),  # ขวาสุด
                     y=0  # ใช้ TARGET_EYE_Y
                 ),
-                scale=1.2,  # เท่ากันทุกคน
+                scale=1.0,  # เท่ากันทุกคน
                 z_index=10,
                 vertical_align="top"
             )
@@ -579,7 +579,7 @@ class LayoutEngine:
                         x=int(self.width * x_positions[i]),
                         y=0  # ใช้ TARGET_EYE_Y
                     ),
-                    scale=1.2,  # เท่ากันทุกคน
+                    scale=1.0,  # เท่ากันทุกคน
                     z_index=10,
                     vertical_align="top"
                 )
