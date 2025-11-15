@@ -2013,94 +2013,72 @@ async def worker_process_async(
             if preset_id and preset_id not in PRESETS:
                 logger.warning(f"⚠️  [Task {task_id}] Preset ID '{preset_id}' not found, using default")
 
-        # Retry logic
-        max_retries = 1
-        retry_count = 0
+        # Generate thumbnail (no retry - fail fast if not enough people)
+        try:
+            # Update status: generating thumbnail
+            task_storage.update(task_id, {
+                "status": "generating",
+                "progress": 85,
+                "message": f"Generating thumbnail with layout '{layout_type}'...",
+                "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
+            })
 
-        while retry_count <= max_retries:
-            try:
-                # Update status: generating thumbnail
+            # Generate thumbnail
+            result = pipeline.generate(
+                title=title,
+                subtitle=subtitle,
+                num_characters=REQUIRED_CHARACTERS,
+                source_folder=None,
+                text_style=text_style,
+                layout_type=layout_type,
+                custom_positions=parsed_positions,
+                vertical_align=vertical_align  # 🎨 Use preset vertical alignment
+            )
+
+            if result['success']:
+                # Success!
                 task_storage.update(task_id, {
-                    "status": "generating",
-                    "progress": 85,
-                    "message": f"Generating thumbnail with layout '{layout_type}'...",
-                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
+                    "status": "completed",
+                    "progress": 100,
+                    "message": "Thumbnail generated successfully!",
+                    "result": {
+                        "success": True,
+                        "thumbnail_path": result['thumbnail_path'],
+                        "filename": result['filename'],
+                        "metadata": result.get('metadata', {})
+                    },
+                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
+                    "completed_at": datetime.now().isoformat()
                 })
+                logger.info(f"✅ [Task {task_id}] Completed: {result['filename']}")
 
-                # Generate thumbnail
-                result = pipeline.generate(
-                    title=title,
-                    subtitle=subtitle,
-                    num_characters=REQUIRED_CHARACTERS,
-                    source_folder=None,
-                    text_style=text_style,
-                    layout_type=layout_type,
-                    custom_positions=parsed_positions,
-                    vertical_align=vertical_align  # 🎨 Use preset vertical alignment
-                )
+                # 🧹 Clean up workspace after success
+                cleanup_workspace(task_id, video_path)
 
-                if result['success']:
-                    # Success!
-                    task_storage.update(task_id, {
-                        "status": "completed",
-                        "progress": 100,
-                        "message": "Thumbnail generated successfully!",
-                        "result": {
-                            "success": True,
-                            "thumbnail_path": result['thumbnail_path'],
-                            "filename": result['filename'],
-                            "metadata": result.get('metadata', {})
-                        },
-                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                        "completed_at": datetime.now().isoformat()
-                    })
-                    logger.info(f"✅ [Task {task_id}] Completed: {result['filename']}")
+                return
+            else:
+                raise Exception(result.get('error', 'Unknown error'))
 
-                    # 🧹 Clean up workspace after success
-                    cleanup_workspace(task_id, video_path)
+        except InsufficientCharactersError as e:
+            # Not enough people found - fail immediately
+            found_people = e.found
+            error_msg = (
+                f"❌ ต้องการนักแสดง {REQUIRED_CHARACTERS} คน แต่พบเพียง {found_people} คนเท่านั้น!\n"
+                f"📹 กรุณาอัพโหลดวิดีโอที่มีนักแสดงชัดเจนอย่างน้อย {REQUIRED_CHARACTERS} คน"
+            )
+            task_storage.update(task_id, {
+                "status": "failed",
+                "progress": 0,
+                "error": error_msg,
+                "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
+                "completed_at": datetime.now().isoformat()
+            })
+            logger.error(f"❌ [Task {task_id}] {error_msg}")
 
-                    return
-                else:
-                    raise Exception(result.get('error', 'Unknown error'))
+            # 🧹 Clean up workspace after failure
+            cleanup_workspace(task_id, video_path)
 
-            except InsufficientCharactersError as e:
-                retry_count += 1
-
-                if retry_count > max_retries:
-                    # Failed after retries
-                    found_people = e.found
-                    error_msg = (
-                        f"❌ ต้องการนักแสดง {REQUIRED_CHARACTERS} คน แต่พบเพียง {found_people} คนเท่านั้น!\n"
-                        f"📹 กรุณาอัพโหลดวิดีโอที่มีนักแสดงชัดเจนอย่างน้อย {REQUIRED_CHARACTERS} คน"
-                    )
-                    task_storage.update(task_id, {
-                        "status": "failed",
-                        "progress": 0,
-                        "error": error_msg,
-                        "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat()),
-                        "completed_at": datetime.now().isoformat()
-                    })
-                    logger.error(f"❌ [Task {task_id}] {error_msg}")
-
-                    # 🧹 Clean up workspace after failure
-                    cleanup_workspace(task_id, video_path)
-
-                    return
-
-                # Retry with more frames
-                logger.warning(f"⚠️  [Task {task_id}] Retry {retry_count}/{max_retries}: extracting more frames...")
-                task_storage.update(task_id, {
-                    "status": "extracting_frames",
-                    "progress": 35,
-                    "message": f"Retrying: extracting more frames (attempt {retry_count + 1}/{max_retries + 1})...",
-                    "created_at": task_storage.get(task_id).get("created_at", datetime.now().isoformat())
-                })
-
-                # Extract additional frames
-                additional_target = 2000
-                additional_frames = extractor.extract_from_video(video_path, num_frames=additional_target)
-                pipeline.ingestor.ingest()
-                logger.info(f"🔄 [Task {task_id}] Retry: extracted {len(additional_frames)} additional frames")
+            return
 
     except Exception as e:
         # Unexpected error
