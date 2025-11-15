@@ -59,8 +59,8 @@ class Settings(BaseSettings):
 
     # Face detection settings (ปรับให้ตรวจจับได้มากขึ้น!)
     FACE_DETECTION_MODEL: str = "buffalo_s"  # ⚡ SPEED MODE: buffalo_s (smaller, 2x faster, 95% accurate)
-    FACE_CONFIDENCE_THRESHOLD: float = 0.45  # 🎯 เข้มงวด - ต้องแน่ใจว่าเป็นหน้าชัดเจน
-    MIN_FACE_SIZE: int = 50  # 🎯 เข้มงวด - หน้าต้องใหญ่พอ ชัดเจน
+    FACE_CONFIDENCE_THRESHOLD: float = 0.35  # 🔓 ผ่อนปรน - เพิ่มโอกาสหาคนได้มากขึ้น (ลดจาก 0.45)
+    MIN_FACE_SIZE: int = 40  # 🔓 ผ่อนปรน - ยอมรับหน้าเล็กกว่า (ลดจาก 50)
 
     # 🆕 ONNX Runtime Optimization (2-4x faster, 75% less RAM!)
     ONNX_ENABLE_OPTIMIZATION: bool = True  # Enable ONNX Runtime optimizations

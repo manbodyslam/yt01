@@ -479,42 +479,60 @@ class ThumbnailPipeline:
 
         logger.info("Thumbnail Pipeline initialized")
 
-    def _adaptive_character_selection(self, desired_counts: List[int]) -> Dict[str, Dict]:
+    def _adaptive_character_selection(self, desired_counts: List[int]) -> Optional[Dict[str, Dict]]:
         """
-        🎯 ADAPTIVE STRATEGY: Try to select characters with progressive fallback
+        🎯 FORCE 3 CHARACTERS (STRICT MODE)
 
         Strategy:
-        - Try desired_counts in order (e.g., [3, 2, 1])
-        - Return first successful result
-        - Never raise error
+        - ถ้าหาได้ >= 3 คน → เลือก 3 คนต่างกัน ✅
+        - ถ้าหาได้ 2 คน → เลือก 2 คน + duplicate คนดีที่สุด = 3 คน ✅
+        - ถ้าหาได้ < 2 คน → ❌ REJECT (return None)
 
         Args:
-            desired_counts: List of character counts to try (e.g., [3, 2, 1])
+            desired_counts: List of character counts (ignored, always force 3)
 
         Returns:
-            Characters dict (1-4 คน ตามที่หาได้) or {} if no characters
+            Characters dict with exactly 3 characters, or None if < 2 unique people
         """
-        for count in desired_counts:
-            logger.info(f"🎯 Attempting to select {count} character(s)...")
+        logger.info(f"🎯 Attempting to select 3 characters (STRICT MODE)...")
 
-            # Call select_characters (ไม่ raise error แล้ว)
-            chars = self.face_service.select_characters(
-                num_characters=count,
-                allow_duplicates=True  # Always allow duplicates for fallback
+        # Try to select up to 3 unique characters
+        chars = self.face_service.select_characters(
+            num_characters=3,
+            allow_duplicates=True
+        )
+
+        num_found = len(chars)
+
+        # ❌ REJECT: Less than 2 unique people
+        if num_found < 2:
+            logger.error(
+                f"❌ REJECTED: Found only {num_found} unique person(s). "
+                f"Required: minimum 2 people for thumbnail."
             )
+            return None
 
-            if len(chars) >= 1:  # Success: ได้อย่างน้อย 1 คน
-                logger.info(
-                    f"✅ Selected {len(chars)} character(s) "
-                    f"(wanted {count}, got {len(chars)})"
-                )
-                return chars
+        # ✅ Found 2 people: Duplicate the best one to make 3
+        if num_found == 2:
+            logger.warning(f"⚠️ Found only 2 unique people, duplicating best person to make 3...")
 
-            logger.warning(f"⚠️ Cannot select {count} character(s), trying next fallback...")
+            # Get the best character (first one = highest score)
+            best_char_key = list(chars.keys())[0]
+            best_char = chars[best_char_key]
 
-        # No characters found at all
-        logger.error("❌ No characters found after all fallback attempts")
-        return {}
+            # Create a duplicate with different key
+            duplicate_key = f"{best_char_key}_dup"
+            chars[duplicate_key] = best_char.copy()
+
+            logger.info(
+                f"✅ Forced 3 characters: 2 unique + 1 duplicate "
+                f"(duplicated: {best_char['image_path'].name})"
+            )
+            return chars
+
+        # ✅ Found 3+ people: Return as is
+        logger.info(f"✅ Selected {num_found} unique character(s)")
+        return chars
 
     def _clear_workspace(self):
         """
@@ -755,18 +773,18 @@ class ThumbnailPipeline:
 
                 logger.info(f"✅ Face analysis complete: {num_clusters_found} unique people")
 
-            # ==================== ADAPTIVE CHARACTER SELECTION ====================
-            logger.info(f"🎯 ADAPTIVE: Selecting characters (desired: {num_characters}, will adapt if needed)...")
+            # ==================== FORCE 3 CHARACTERS (STRICT MODE) ====================
+            logger.info(f"🎯 STRICT MODE: Forcing 3 characters (minimum 2 unique people required)...")
 
-            # Try to select characters: 3 → 2 → 1 (adaptive fallback)
+            # Force 3 characters (will duplicate if needed, reject if < 2 unique people)
             characters = self._adaptive_character_selection(
-                desired_counts=[num_characters, 2, 1] if num_characters == 3 else [num_characters, 1]
+                desired_counts=[3]  # Ignored parameter (always force 3)
             )
 
             if not characters:
                 return {
                     "success": False,
-                    "error": "FATAL: Cannot select any characters (no faces found)"
+                    "error": "REJECTED: Video has less than 2 unique people. Thumbnail requires minimum 2 people."
                 }
 
             logger.info(f"✅ Selected {len(characters)} character(s)")
