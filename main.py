@@ -2189,8 +2189,26 @@ async def worker_process_async(
 
         else:
             # ❌ FATAL ERROR (Pipeline tried everything)
-            task_storage.fail(task_id, result.get('error', 'Unknown error'))
-            logger.error(f"❌ [Task {task_id}] Failed: {result.get('error')}")
+            error_msg = result.get('error', 'Unknown error')
+
+            # ปรับปรุง error message ให้ชัดเจนสำหรับ n8n
+            if "less than 2 unique people" in error_msg or "minimum 2 people" in error_msg:
+                user_friendly_error = (
+                    "❌ วิดีโอนี้ไม่มีคนเพียงพอสำหรับสร้าง Thumbnail\n\n"
+                    "📊 พบ: น้อยกว่า 2 คน\n"
+                    "✅ ต้องการ: อย่างน้อย 2 คน (ระบบจะสร้าง 3 คนโดยอัตโนมัติ)\n\n"
+                    "💡 วิธีแก้:\n"
+                    "  1. ใช้วิดีโอที่มีนักแสดงอย่างน้อย 2 คนขึ้นไป\n"
+                    "  2. ใบหน้าต้องชัดเจน ไม่เบลอ\n"
+                    "  3. หันหน้ามาทางกล้อง\n"
+                    "  4. มีแสงสว่างเพียงพอ"
+                )
+                task_storage.fail(task_id, user_friendly_error)
+                logger.error(f"❌ [Task {task_id}] REJECTED: {user_friendly_error}")
+            else:
+                # Error อื่นๆ
+                task_storage.fail(task_id, error_msg)
+                logger.error(f"❌ [Task {task_id}] Failed: {error_msg}")
 
         # 🧹 Cleanup workspace
         cleanup_workspace(task_id, video_path)
