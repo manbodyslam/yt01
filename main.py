@@ -644,7 +644,9 @@ class ThumbnailPipeline:
                 characters=characters,
                 layout_type=final_layout,
                 custom_positions=custom_positions,
-                vertical_align=vertical_align
+                vertical_align=vertical_align,
+                title=title,
+                subtitle=subtitle
             )
 
             if final_layout == suggested_layout:

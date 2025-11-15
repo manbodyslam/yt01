@@ -4,6 +4,8 @@ Layout Engine - Determine layout positions for characters and text
 
 import random
 from typing import Dict, List, Tuple, Optional
+from pathlib import Path
+from PIL import Image, ImageFont, ImageDraw
 from loguru import logger
 from dataclasses import dataclass
 
@@ -55,6 +57,63 @@ class LayoutEngine:
         self.secondary_scale = settings.SECONDARY_CHARACTER_SCALE
 
         logger.info(f"LayoutEngine initialized ({self.width}x{self.height})")
+
+    def _calculate_optimal_font_size(
+        self,
+        text: str,
+        default_size: int,
+        max_width: int,
+        font_path: Path
+    ) -> int:
+        """
+        Calculate optimal font size for text to fit within max_width
+
+        Args:
+            text: Text to measure
+            default_size: Default font size (from config)
+            max_width: Maximum allowed width in pixels
+            font_path: Path to font file
+
+        Returns:
+            Optimal font size (minimum 50% of default)
+        """
+        try:
+            # Load font at default size
+            font = ImageFont.truetype(str(font_path), default_size)
+
+            # Create a temporary image to measure text
+            temp_img = Image.new('RGB', (1, 1))
+            draw = ImageDraw.Draw(temp_img)
+
+            # Measure text width at default size
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+
+            # If text fits, return default size
+            if text_width <= max_width:
+                return default_size
+
+            # Calculate scale factor needed to fit text
+            scale_factor = max_width / text_width
+
+            # Apply scale factor with 5% safety margin
+            new_size = int(default_size * scale_factor * 0.95)
+
+            # Enforce minimum size (50% of default)
+            min_size = int(default_size * 0.5)
+            optimal_size = max(new_size, min_size)
+
+            logger.info(
+                f"📏 Auto-resize: '{text[:30]}...' "
+                f"{default_size}px → {optimal_size}px "
+                f"(width: {text_width}px > {max_width}px)"
+            )
+
+            return optimal_size
+
+        except Exception as e:
+            logger.warning(f"⚠️ Font resize calculation failed: {e}, using default size")
+            return default_size
 
     def _add_position_variation(self, x: int, y: int, variation_percent: float = 0.03) -> Position:
         """
@@ -110,7 +169,9 @@ class LayoutEngine:
         characters: Dict[str, Dict],
         layout_type: str = None,
         custom_positions: Optional[List[Dict]] = None,
-        vertical_align: str = "top"
+        vertical_align: str = "top",
+        title: str = "",
+        subtitle: str = ""
     ) -> Dict:
         """
         Create complete layout for characters and text
@@ -119,6 +180,9 @@ class LayoutEngine:
             characters: Character data from FaceService
             layout_type: Optional explicit layout type (from AI suggestion)
             custom_positions: Optional custom positions [{"x": 100, "y": 50, "scale": 2.0}, ...]
+            vertical_align: Vertical alignment for characters
+            title: Title text (for auto font resize calculation)
+            subtitle: Subtitle text (for auto font resize calculation)
 
         Returns:
             Layout dictionary with character and text placements
@@ -155,8 +219,8 @@ class LayoutEngine:
         for placement in char_placements:
             placement.vertical_align = vertical_align
 
-        # Generate text placements
-        text_placements = self._create_text_layout(char_placements)
+        # Generate text placements with auto font resize
+        text_placements = self._create_text_layout(char_placements, title, subtitle)
 
         layout = {
             'type': layout_type,
@@ -544,12 +608,20 @@ class LayoutEngine:
 
         return placements
 
-    def _create_text_layout(self, char_placements: List[CharacterPlacement]) -> List[TextPlacement]:
+    def _create_text_layout(
+        self,
+        char_placements: List[CharacterPlacement],
+        title: str = "",
+        subtitle: str = ""
+    ) -> List[TextPlacement]:
         """
         Create text layout that doesn't overlap with characters
+        Auto-resize font if text is too long
 
         Args:
             char_placements: Character placements
+            title: Title text (for auto font resize)
+            subtitle: Subtitle text (for auto font resize)
 
         Returns:
             List of text placements
@@ -563,11 +635,34 @@ class LayoutEngine:
         # Move text up by 0.75% from bottom (1080 * 0.0075 = 8.1 ≈ 8 pixels) - ลดอีก 50%
         move_up_offset = int(self.height * 0.0075)  # 8 pixels (ลดจาก 16 pixels)
 
+        # Calculate max width for text
+        max_text_width = self.width - (2 * self.margin)
+
+        # Get font path
+        font_path = settings.FONTS_DIR / settings.FONT_TITLE
+
+        # 🔥 AUTO FONT RESIZE: Calculate optimal font sizes
+        title_font_size = self._calculate_optimal_font_size(
+            text=title or "Sample Title",
+            default_size=settings.TITLE_FONT_SIZE,
+            max_width=max_text_width,
+            font_path=font_path
+        )
+
+        subtitle_font_size = self._calculate_optimal_font_size(
+            text=subtitle or "Sample Subtitle",
+            default_size=settings.SUBTITLE_FONT_SIZE,
+            max_width=max_text_width,
+            font_path=font_path
+        )
+
         # Subtitle is at the very bottom (moved down by 20px from original)
-        subtitle_y = self.height - bottom_margin - settings.SUBTITLE_FONT_SIZE - move_up_offset + 70
+        # Use actual subtitle font size for positioning
+        subtitle_y = self.height - bottom_margin - subtitle_font_size - move_up_offset + 70
 
         # Title is above subtitle (same spacing as before, will move down 20px automatically)
-        title_y = subtitle_y - settings.TITLE_FONT_SIZE + 10
+        # Use actual title font size for positioning
+        title_y = subtitle_y - title_font_size + 10
 
         title_placement = TextPlacement(
             text_type="title",
@@ -575,9 +670,9 @@ class LayoutEngine:
                 x=self.width // 2,  # Center X
                 y=title_y
             ),
-            max_width=self.width - (2 * self.margin),
-            font_size=settings.TITLE_FONT_SIZE,
-            alignment="center"  # Changed to center
+            max_width=max_text_width,
+            font_size=title_font_size,  # 🔥 Use calculated optimal size
+            alignment="center"
         )
 
         subtitle_placement = TextPlacement(
@@ -586,9 +681,9 @@ class LayoutEngine:
                 x=self.width // 2,  # Center X
                 y=subtitle_y
             ),
-            max_width=self.width - (2 * self.margin),
-            font_size=settings.SUBTITLE_FONT_SIZE,  # ใช้ SUBTITLE_FONT_SIZE (ตอนนี้เท่ากับ title = 240px)
-            alignment="center"  # Changed to center
+            max_width=max_text_width,
+            font_size=subtitle_font_size,  # 🔥 Use calculated optimal size
+            alignment="center"
         )
 
         return [title_placement, subtitle_placement]
