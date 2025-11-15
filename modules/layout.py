@@ -142,26 +142,50 @@ class LayoutEngine:
 
     def select_layout(self, num_characters: int, layout_type: str = None) -> str:
         """
-        🔥 STRICT 3 CHARACTERS ONLY: Select tri layout (บังคับ 3 คนเท่านั้น!)
+        Select layout based on number of characters
 
         Args:
-            num_characters: Number of characters (must be 3)
-            layout_type: Optional explicit layout type (must be tri layout)
+            num_characters: Number of characters (1-4)
+            layout_type: Optional explicit layout type
 
         Returns:
-            Layout name (tri_hero, tri_pyramid, or tri_staggered)
+            Layout name that matches num_characters
         """
-        # ✅ TRI LAYOUTS ONLY
-        TRI_LAYOUTS = ["tri_hero", "tri_pyramid", "tri_staggered"]
+        # Define all available layouts by character count
+        LAYOUTS_BY_COUNT = {
+            1: ["solo_focus"],
+            2: ["duo_focus", "duo_diagonal"],
+            3: ["tri_hero", "tri_pyramid", "tri_staggered"],
+            4: ["quad_lineup"]
+        }
 
-        # If explicit tri layout provided, use it
-        if layout_type and layout_type in TRI_LAYOUTS:
-            logger.info(f"🎯 Using specified tri layout: {layout_type}")
-            return layout_type
+        # Layout requirements mapping (for validation)
+        LAYOUT_REQUIREMENTS = {
+            'solo_focus': 1,
+            'duo_focus': 2,
+            'duo_diagonal': 2,
+            'tri_hero': 3,
+            'tri_pyramid': 3,
+            'tri_staggered': 3,
+            'quad_lineup': 4
+        }
 
-        # 🎲 RANDOMIZATION: Randomly select between 3 tri layouts
-        selected = random.choice(TRI_LAYOUTS)
-        logger.info(f"🎲 Random tri layout selection: {selected} (from {TRI_LAYOUTS})")
+        # If explicit layout provided, validate it matches num_characters
+        if layout_type:
+            required_count = LAYOUT_REQUIREMENTS.get(layout_type)
+            if required_count == num_characters:
+                logger.info(f"🎯 Using specified layout: {layout_type} (for {num_characters} character(s))")
+                return layout_type
+            else:
+                logger.warning(
+                    f"⚠️ Layout mismatch: '{layout_type}' requires {required_count} chars "
+                    f"but have {num_characters} chars. Will select appropriate layout."
+                )
+
+        # Select random layout from available layouts for this character count
+        available_layouts = LAYOUTS_BY_COUNT.get(num_characters, ["solo_focus"])
+        selected = random.choice(available_layouts)
+        logger.info(f"🎲 Random layout selection: {selected} (for {num_characters} character(s))")
         return selected
 
     def create_layout(

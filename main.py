@@ -2115,7 +2115,8 @@ async def worker_process_async(
                         text_style=text_style,
                         layout_type=layout_type,
                         custom_positions=parsed_positions,
-                        vertical_align=vertical_align
+                        vertical_align=vertical_align,
+                        allow_duplicates=True  # 🔥 ยอมรับคนซ้ำถ้าหาไม่พอ
                     )
 
                     if result['success']:
