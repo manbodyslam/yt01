@@ -391,34 +391,34 @@ class LayoutEngine:
         chars_list = list(characters.items())
 
         placements = [
-            # ตัวละครซ้าย - 1.5x พอดีกับ canvas
+            # ตัวละครซ้าย - 1.2x ขนาดพอดี
             CharacterPlacement(
                 role=chars_list[0][0],
                 position=Position(
                     x=int(self.width * 0.21),  # ซ้าย 21%
                     y=0
                 ),
-                scale=1.5,  # ✨ ขยาย 1.5x - พอดี!
+                scale=1.2,  # 📏 ขยาย 1.2x
                 z_index=9
             ),
-            # ตัวละครกลาง - 1.5x พอดีกับ canvas
+            # ตัวละครกลาง - 1.2x ขนาดพอดี
             CharacterPlacement(
                 role=chars_list[1][0],
                 position=Position(
                     x=int(self.width * 0.50),  # ตรงกลาง 50%
                     y=0
                 ),
-                scale=1.5,  # ✨ ขยาย 1.5x - พอดี!
+                scale=1.2,  # 📏 ขยาย 1.2x
                 z_index=10
             ),
-            # ตัวละครขวา - 1.5x พอดีกับ canvas
+            # ตัวละครขวา - 1.2x ขนาดพอดี
             CharacterPlacement(
                 role=chars_list[2][0],
                 position=Position(
                     x=int(self.width * 0.79),  # ขวา 79%
                     y=0
                 ),
-                scale=1.5,  # ✨ ขยาย 1.5x - พอดี!
+                scale=1.2,  # 📏 ขยาย 1.2x
                 z_index=9
             )
         ]
