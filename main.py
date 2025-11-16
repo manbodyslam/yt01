@@ -2742,9 +2742,9 @@ async def n8n_generate_from_google_drive(request: GoogleDriveRequest):
 
         logger.info(f"Extracted {len(frames)} frames")
 
-        # Process text style
+        # Process text style (deterministic - ไม่สุ่ม)
         if request.text_style == "auto":
-            text_style = random.choice(["style1", "style2", "style3"])
+            text_style = "style1"  # ใช้ style1 เสมอ (ไม่สุ่ม)
         else:
             text_style = request.text_style
 

@@ -2,7 +2,6 @@
 Layout Engine - Determine layout positions for characters and text
 """
 
-import random
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 from PIL import Image, ImageFont, ImageDraw
@@ -115,31 +114,6 @@ class LayoutEngine:
             logger.warning(f"⚠️ Font resize calculation failed: {e}, using default size")
             return default_size
 
-    def _add_position_variation(self, x: int, y: int, variation_percent: float = 0.03) -> Position:
-        """
-        Add slight random variation to position for variety
-
-        Args:
-            x: Original x coordinate
-            y: Original y coordinate
-            variation_percent: Max variation as percentage of image dimensions (default 3%)
-
-        Returns:
-            Position with random variation applied
-        """
-        # Calculate max variation in pixels
-        max_x_variation = int(self.width * variation_percent)
-        max_y_variation = int(self.height * variation_percent)
-
-        # Add random variation (±variation)
-        x_offset = random.randint(-max_x_variation, max_x_variation)
-        y_offset = random.randint(-max_y_variation, max_y_variation)
-
-        new_x = max(0, min(self.width, x + x_offset))
-        new_y = max(0, min(self.height, y + y_offset))
-
-        return Position(x=new_x, y=new_y)
-
     def select_layout(self, num_characters: int, preferred_layout: str = None) -> str:
         """
         Select layout based on number of characters
@@ -155,7 +129,7 @@ class LayoutEngine:
         LAYOUTS_BY_COUNT = {
             1: ["solo_focus"],
             2: ["duo_focus", "duo_diagonal"],
-            3: ["tri_hero", "tri_pyramid", "tri_staggered"],
+            3: ["tri_hero"],  # เหลือแค่แบบเดียว!
             4: ["quad_lineup"]
         }
 
@@ -165,8 +139,6 @@ class LayoutEngine:
             'duo_focus': 2,
             'duo_diagonal': 2,
             'tri_hero': 3,
-            'tri_pyramid': 3,
-            'tri_staggered': 3,
             'quad_lineup': 4
         }
 
@@ -182,10 +154,10 @@ class LayoutEngine:
                     f"but have {num_characters} chars. Will select appropriate layout."
                 )
 
-        # Select random layout from available layouts for this character count
+        # Select layout from available layouts for this character count (always use first one)
         available_layouts = LAYOUTS_BY_COUNT.get(num_characters, ["solo_focus"])
-        selected = random.choice(available_layouts)
-        logger.info(f"🎲 Random layout selection: {selected} (for {num_characters} character(s))")
+        selected = available_layouts[0]  # ใช้แบบแรกเสมอ (ไม่สุ่ม)
+        logger.info(f"🎯 Deterministic layout selection: {selected} (for {num_characters} character(s))")
         return selected
 
     def create_layout(
@@ -230,10 +202,6 @@ class LayoutEngine:
                 char_placements = self._layout_duo_diagonal(characters)
             elif layout_type == "tri_hero":
                 char_placements = self._layout_tri_hero(characters)
-            elif layout_type == "tri_pyramid":
-                char_placements = self._layout_tri_pyramid(characters)
-            elif layout_type == "tri_staggered":
-                char_placements = self._layout_tri_staggered(characters)
             elif layout_type == "quad_lineup":
                 char_placements = self._layout_quad_lineup(characters)
             else:
@@ -380,10 +348,9 @@ class LayoutEngine:
         Tri-Hero Layout - 3 คนเรียงแถว แบบสมดุล (Balanced Lineup)
 
         จุดเด่น:
-        - ตัวละคร 3 คนขนาดเท่ากัน แต่ไม่เท่ากันทุกคน (มีความหลากหลาย)
-        - ตัวกลางใหญ่ที่สุด (scale 1.2) เป็นจุดสนใจหลัก
-        - ซ้าย-ขวา ขนาดกลาง (scale 1.0) รองรับตัวกลาง
-        - เว้นระยะพอดี ไม่ทับกัน ดูเป็นทีม
+        - ตัวละคร 3 คนขนาดใหญ่ (scale 1.5) เห็นหน้าชัดถึงเอว
+        - ตัวกลางอยู่ตรงกลาง ซ้าย-ขวา ห่างออกไป
+        - เว้นระยะพอดี ไม่ติดกัน ดูเป็นทีม
 
         Args:
             characters: Character data
@@ -394,36 +361,36 @@ class LayoutEngine:
         chars_list = list(characters.items())
 
         placements = [
-            # ตัวละครซ้าย - 1.2x ขนาดเท่ากัน
+            # ตัวละครซ้าย - 1.5x ใหญ่ขึ้น + ห่างออกไป
             CharacterPlacement(
                 role=chars_list[0][0],
                 position=Position(
-                    x=int(self.width * 0.30),  # ซ้าย 30% (ใกล้กลางมาก!)
+                    x=int(self.width * 0.20),  # ซ้าย 20% (ห่างออกไป)
                     y=0
                 ),
-                scale=1.2,
+                scale=1.5,  # ใหญ่ขึ้น 25%
                 z_index=9,
                 vertical_align="top"
             ),
-            # ตัวละครกลาง - 1.2x ขนาดเท่ากัน
+            # ตัวละครกลาง - 1.5x ใหญ่ขึ้น
             CharacterPlacement(
                 role=chars_list[1][0],
                 position=Position(
                     x=int(self.width * 0.50),  # ตรงกลาง 50%
                     y=0
                 ),
-                scale=1.2,
+                scale=1.5,  # ใหญ่ขึ้น 25%
                 z_index=10,
                 vertical_align="top"
             ),
-            # ตัวละครขวา - 1.2x ขนาดเท่ากัน
+            # ตัวละครขวา - 1.5x ใหญ่ขึ้น + ห่างออกไป
             CharacterPlacement(
                 role=chars_list[2][0],
                 position=Position(
-                    x=int(self.width * 0.70),  # ขวา 70% (ใกล้กลางมาก!)
+                    x=int(self.width * 0.80),  # ขวา 80% (ห่างออกไป)
                     y=0
                 ),
-                scale=1.2,
+                scale=1.5,  # ใหญ่ขึ้น 25%
                 z_index=9,
                 vertical_align="top"
             )
@@ -431,117 +398,6 @@ class LayoutEngine:
 
         return placements
 
-    def _layout_tri_pyramid(self, characters: Dict[str, Dict]) -> List[CharacterPlacement]:
-        """
-        Tri-Pyramid Layout - โฟกัสตัวหลัก มีตัวรอง 2 คนด้านหลัง (Hero Focus)
-
-        จุดเด่น:
-        - ตัวหลักใหญ่มาก (scale 1.3) อยู่ด้านหน้า - เป็น HERO
-        - ตัวรอง 2 คน เล็กกว่า (scale 0.75) อยู่ด้านหลังสูงขึ้น
-        - สร้างความลึก (depth) ด้วย z-index
-        - เหมาะกับเนื้อหาที่มีตัวเอกชัดเจน
-
-        Args:
-            characters: Character data
-
-        Returns:
-            List of character placements
-        """
-        chars_list = list(characters.items())
-
-        placements = [
-            # ตัวหลัก - 1.2x ขนาดเท่ากัน (ตาระดับเดียวกัน)
-            CharacterPlacement(
-                role=chars_list[0][0],
-                position=Position(
-                    x=int(self.width * 0.50),  # ตรงกลางพอดี
-                    y=0  # ใช้ TARGET_EYE_Y แทน
-                ),
-                scale=1.2,  # เท่ากันทุกคน!
-                z_index=12,  # อยู่หน้าสุด
-                vertical_align="top"  # ใช้ eye-level positioning
-            ),
-            # ตัวรองซ้าย - 1.2x ขนาดเท่ากัน (ตาระดับเดียวกัน)
-            CharacterPlacement(
-                role=chars_list[1][0],
-                position=Position(
-                    x=int(self.width * 0.22),  # ซ้าย
-                    y=0  # ใช้ TARGET_EYE_Y แทน
-                ),
-                scale=1.2,  # เท่ากันทุกคน!
-                z_index=8,   # อยู่หลังตัวหลัก
-                vertical_align="top"  # ใช้ eye-level positioning
-            ),
-            # ตัวรองขวา - 1.2x ขนาดเท่ากัน (ตาระดับเดียวกัน)
-            CharacterPlacement(
-                role=chars_list[2][0],
-                position=Position(
-                    x=int(self.width * 0.78),  # ขวา
-                    y=0  # ใช้ TARGET_EYE_Y แทน
-                ),
-                scale=1.2,  # เท่ากันทุกคน!
-                z_index=8,   # อยู่หลังตัวหลัก
-                vertical_align="top"  # ใช้ eye-level positioning
-            )
-        ]
-
-        return placements
-
-    def _layout_tri_staggered(self, characters: Dict[str, Dict]) -> List[CharacterPlacement]:
-        """
-        Tri-Staggered Layout - 3 คนวางเป็นชั้นๆ ไดนามิก (Dynamic Diagonal)
-
-        จุดเด่น:
-        - วางเป็นลำดับชั้น สูง-กลาง-ต่ำ
-        - ขนาดแตกต่างกัน สร้างจังหวะ
-        - ดูมีพลัง เคลื่อนไหว เหมาะกับเนื้อหาแอคชั่น/ตื่นเต้น
-        - มี depth และ visual flow
-
-        Args:
-            characters: Character data
-
-        Returns:
-            List of character placements
-        """
-        chars_list = list(characters.items())
-
-        placements = [
-            # ตัวละครซ้าย - 1.2x ขนาดเท่ากัน
-            CharacterPlacement(
-                role=chars_list[0][0],
-                position=Position(
-                    x=int(self.width * 0.18),  # ซ้ายสุด
-                    y=0  # ใช้ TARGET_EYE_Y
-                ),
-                scale=1.2,  # เท่ากันทุกคน
-                z_index=9,
-                vertical_align="top"
-            ),
-            # ตัวละครกลาง - 1.2x ขนาดเท่ากัน
-            CharacterPlacement(
-                role=chars_list[1][0],
-                position=Position(
-                    x=int(self.width * 0.50),  # ตรงกลาง
-                    y=0  # ใช้ TARGET_EYE_Y
-                ),
-                scale=1.2,  # เท่ากันทุกคน
-                z_index=11,
-                vertical_align="top"
-            ),
-            # ตัวละครขวา - 1.2x ขนาดเท่ากัน
-            CharacterPlacement(
-                role=chars_list[2][0],
-                position=Position(
-                    x=int(self.width * 0.82),  # ขวาสุด
-                    y=0  # ใช้ TARGET_EYE_Y
-                ),
-                scale=1.2,  # เท่ากันทุกคน
-                z_index=10,
-                vertical_align="top"
-            )
-        ]
-
-        return placements
 
     def _layout_quad_lineup(self, characters: Dict[str, Dict]) -> List[CharacterPlacement]:
         """

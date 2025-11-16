@@ -316,7 +316,7 @@ class Renderer:
             eye_center_x_norm = eye_center_x * scale_factor
             eye_center_y_norm = eye_center_y * scale_factor
 
-            # 3. Crop แบบ TOP-ALIGNED: หัวชิดบน, ด้านล่างยาวลงไปเรื่อยๆ!
+            # 3. Crop มุมมองถึงเอว: หัวชิดบน, ครอปถึงเอวพอดี!
             # คำนวณ face height เพื่อใช้เป็นฐาน
             face_h_estimated = eye_distance * 2.5  # ประมาณความสูงหน้า
             TOP_HEAD_PADDING = int(face_h_estimated * 1.5)  # พื้นที่เหนือหัว (เพิ่มเป็น 1.5x)
@@ -325,9 +325,9 @@ class Renderer:
             # หาจุดบนสุดของหัว (ประมาณจากตา)
             head_top = int(eye_center_y_norm - TOP_HEAD_PADDING)
 
-            # Crop จากบนสุดของหัวลงไปจนสุดรูป! (ไม่ตัดด้านล่าง)
+            # Crop จากบนสุดของหัวลงไปถึงเอว (2.5x face height)
             crop_y1 = max(0, head_top)  # บนสุดของหัว
-            crop_y2 = normalized_img.height  # ลงไปจนสุดรูป!
+            crop_y2 = int(eye_center_y_norm + (face_h_estimated * 2.5))  # ลงไปถึงเอว!
             crop_x1 = int(eye_center_x_norm - (TARGET_EYE_DISTANCE + SIDE_MARGIN))
             crop_x2 = int(eye_center_x_norm + (TARGET_EYE_DISTANCE + SIDE_MARGIN))
 
@@ -335,7 +335,7 @@ class Renderer:
             logger.info(f"      📐 Crop before boundary: y1={crop_y1}, y2={crop_y2}")
 
         else:
-            # Fallback: ไม่มี landmarks → ใช้ bbox + top-to-bottom crop
+            # Fallback: ไม่มี landmarks → ใช้ bbox + crop ถึงเอว
             x1, y1, x2, y2 = map(int, bbox)
             face_h = y2 - y1
             face_center_y = (y1 + y2) / 2
@@ -343,13 +343,13 @@ class Renderer:
             # ใช้ bbox เป็นจุดอ้างอิง
             normalized_img = source_pil
 
-            # Top-to-bottom crop (เหมือนกับ kps path)
+            # Crop ถึงเอว (เหมือนกับ kps path)
             TOP_HEAD_PADDING = int(face_h * 1.2)  # ประมาณ พื้นที่เหนือหัว
             SIDE_MARGIN = int(face_h * 1.0)  # ซ้ายขวา
 
             head_top = int(y1 - TOP_HEAD_PADDING)
             crop_y1 = max(0, head_top)  # บนสุดของหัว
-            crop_y2 = normalized_img.height  # ลงไปจนสุดรูป!
+            crop_y2 = int(face_center_y + (face_h * 3.0))  # ลงไปถึงเอว!
             crop_x1 = int((x1 + x2) / 2 - SIDE_MARGIN)
             crop_x2 = int((x1 + x2) / 2 + SIDE_MARGIN)
 
