@@ -317,8 +317,8 @@ class Renderer:
             eye_center_y_norm = eye_center_y * scale_factor
 
             # 3. Crop ด้วยระยะคงที่จากตา (ทุกคนเท่ากัน!)
-            TOP_MARGIN = 150      # จากตาไปด้านบน (ผม + หน้าผาก) - เพิ่มเพื่อไม่ให้หัวขาด!
-            BOTTOM_MARGIN = 550   # จากตาไปด้านล่าง (จมูก + ปาก + คอ + ตัว)
+            TOP_MARGIN = 200      # จากตาไปด้านบน (ผม + หน้าผาก) - เพิ่มเพื่อไม่ให้ผมขาด!
+            BOTTOM_MARGIN = 500   # จากตาไปด้านล่าง (จมูก + ปาก + คอ + ตัว)
             SIDE_MARGIN = 150     # ซ้ายขวา
 
             crop_y1 = int(eye_center_y_norm - TOP_MARGIN)
@@ -416,8 +416,8 @@ class Renderer:
             # คำนวณตำแหน่งตาหลัง scale
             eye_y_scaled = eye_y_in_crop * (new_h / crop_height)
 
-            # กำหนดตำแหน่งตาที่ต้องการบนจอ (เพิ่มจาก 180 → 360 เพื่อให้หัวไม่ขาด!)
-            TARGET_EYE_Y = 360  # ตาทุกคนอยู่ที่ 360px จากบน - เว้นพื้นที่ให้ผม+หน้าผาก!
+            # กำหนดตำแหน่งตาที่ต้องการบนจอ (เพิ่มจาก 360 → 450 เพื่อให้หัวห่างจากบนสุด!)
+            TARGET_EYE_Y = 450  # ตาทุกคนอยู่ที่ 450px จากบน - หัวห่างจากบนมาก!
 
             # คำนวณ paste_y ให้ตาอยู่ที่ TARGET_EYE_Y
             paste_y = int(TARGET_EYE_Y - eye_y_scaled)
