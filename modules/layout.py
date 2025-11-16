@@ -398,7 +398,7 @@ class LayoutEngine:
             CharacterPlacement(
                 role=chars_list[0][0],
                 position=Position(
-                    x=int(self.width * 0.26),  # ซ้าย 26% (ใกล้กลางมากขึ้น)
+                    x=int(self.width * 0.30),  # ซ้าย 30% (ใกล้กลางมาก!)
                     y=0
                 ),
                 scale=1.2,
@@ -420,7 +420,7 @@ class LayoutEngine:
             CharacterPlacement(
                 role=chars_list[2][0],
                 position=Position(
-                    x=int(self.width * 0.74),  # ขวา 74% (ใกล้กลางมากขึ้น)
+                    x=int(self.width * 0.70),  # ขวา 70% (ใกล้กลางมาก!)
                     y=0
                 ),
                 scale=1.2,
