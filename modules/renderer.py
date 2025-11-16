@@ -419,8 +419,8 @@ class Renderer:
             # คำนวณตำแหน่งตาหลัง scale
             eye_y_scaled = eye_y_in_crop * (new_h / crop_height)
 
-            # ตาอยู่ที่ 350px จากบน (เน้นหน้า!)
-            TARGET_EYE_Y = 350
+            # ตาอยู่ที่ 450px จากบน (หัวลงมา!)
+            TARGET_EYE_Y = 450
             paste_y = int(TARGET_EYE_Y - eye_y_scaled)
 
             logger.info(f"      📍 Face-focused: eye at y={TARGET_EYE_Y}px (paste_y={paste_y}px)")
