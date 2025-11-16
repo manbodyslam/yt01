@@ -333,19 +333,25 @@ class Renderer:
             logger.info(f"      📐 Crop before boundary: y1={crop_y1}, y2={crop_y2}")
 
         else:
-            # Fallback: ไม่มี landmarks → ใช้ bbox (แบบเดิม)
+            # Fallback: ไม่มี landmarks → ใช้ bbox + top-to-bottom crop
             x1, y1, x2, y2 = map(int, bbox)
             face_h = y2 - y1
             face_center_y = (y1 + y2) / 2
 
             # ใช้ bbox เป็นจุดอ้างอิง
             normalized_img = source_pil
-            crop_y1 = int(y1 - face_h * 0.3)
-            crop_y2 = int(y2 + face_h * 2.5)
-            crop_x1 = int(x1 - face_h * 0.5)
-            crop_x2 = int(x2 + face_h * 0.5)
 
-            logger.warning(f"      ⚠️  No landmarks - using bbox fallback")
+            # Top-to-bottom crop (เหมือนกับ kps path)
+            TOP_HEAD_PADDING = int(face_h * 1.2)  # ประมาณ พื้นที่เหนือหัว
+            SIDE_MARGIN = int(face_h * 1.0)  # ซ้ายขวา
+
+            head_top = int(y1 - TOP_HEAD_PADDING)
+            crop_y1 = max(0, head_top)  # บนสุดของหัว
+            crop_y2 = normalized_img.height  # ลงไปจนสุดรูป!
+            crop_x1 = int((x1 + x2) / 2 - SIDE_MARGIN)
+            crop_x2 = int((x1 + x2) / 2 + SIDE_MARGIN)
+
+            logger.warning(f"      ⚠️  No landmarks - using bbox + top-to-bottom fallback")
             logger.info(f"      📐 Crop before boundary: y1={crop_y1}, y2={crop_y2}")
 
         # 4. Boundary check (ป้องกันเกินขอบรูป)
@@ -359,8 +365,8 @@ class Renderer:
             eye_y_in_crop = eye_center_y_norm - crop_y1
             logger.info(f"      📐 Eye position in crop (after boundary): {eye_y_in_crop:.1f}px from top")
         else:
-            # Fallback: ประมาณตำแหน่งตาหลัง boundary check
-            estimated_eye_y = y1 + face_h * 0.4
+            # Fallback: ประมาณตำแหน่งตา (กลาง bbox)
+            estimated_eye_y = face_center_y  # ใช้ center ของ bbox
             eye_y_in_crop = estimated_eye_y - crop_y1
             logger.info(f"      📐 Estimated eye position in crop (after boundary): {eye_y_in_crop:.1f}px from top")
 
