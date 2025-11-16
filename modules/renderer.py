@@ -318,7 +318,7 @@ class Renderer:
 
             # 3. Crop แบบ TOP-ALIGNED: หัวชิดบน, ด้านล่างยาวลงไปเรื่อยๆ!
             TOP_HEAD_PADDING = 250    # พื้นที่เหนือหัว (สำหรับผม) - ขึ้นจากตา
-            SIDE_MARGIN = 150         # ซ้ายขวา
+            SIDE_MARGIN = 220         # ซ้ายขวา - เพิ่มเพื่อไม่ให้มือขาด!
 
             # หาจุดบนสุดของหัว (ประมาณจากตา)
             head_top = int(eye_center_y_norm - TOP_HEAD_PADDING)
