@@ -320,7 +320,7 @@ class Renderer:
             # คำนวณ face height เพื่อใช้เป็นฐาน
             face_h_estimated = eye_distance * 2.5  # ประมาณความสูงหน้า
             TOP_HEAD_PADDING = int(face_h_estimated * 1.5)  # พื้นที่เหนือหัว (เพิ่มเป็น 1.5x)
-            SIDE_MARGIN = 220         # ซ้ายขวา - เพื่อไม่ให้มือขาด!
+            SIDE_MARGIN = 300         # ซ้ายขวา - เพิ่มเพื่อให้ตัวกว้างขึ้น!
 
             # หาจุดบนสุดของหัว (ประมาณจากตา)
             head_top = int(eye_center_y_norm - TOP_HEAD_PADDING)
