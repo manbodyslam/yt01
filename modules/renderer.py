@@ -415,12 +415,15 @@ class Renderer:
         if placement.vertical_align == "bottom":
             # ชิดขอบล่าง: ให้ส่วนล่างของตัวละครชิดขอบล่างของ canvas
             paste_y = canvas.height - new_h
-        else:  # "top" (default) - หัวชิดบน, ด้านล่างยาวลงไป!
-            # ให้หัวชิดขอบบน (เว้น margin เล็กน้อย)
-            TOP_CANVAS_MARGIN = 20  # เว้นจากขอบบน 20px
-            paste_y = TOP_CANVAS_MARGIN
+        else:  # "top" (default) - เน้นหน้า (Face-Focused)
+            # คำนวณตำแหน่งตาหลัง scale
+            eye_y_scaled = eye_y_in_crop * (new_h / crop_height)
 
-            logger.info(f"      📍 Top-aligned: paste_y={paste_y}px (head at top, body extends down)")
+            # ตาอยู่ที่ 350px จากบน (เน้นหน้า!)
+            TARGET_EYE_Y = 350
+            paste_y = int(TARGET_EYE_Y - eye_y_scaled)
+
+            logger.info(f"      📍 Face-focused: eye at y={TARGET_EYE_Y}px (paste_y={paste_y}px)")
 
         logger.info(
             f"      📍 Layout Position: X={placement.position.x}, Y={placement.position.y} | "
