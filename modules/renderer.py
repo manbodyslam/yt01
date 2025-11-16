@@ -316,13 +316,16 @@ class Renderer:
             eye_center_x_norm = eye_center_x * scale_factor
             eye_center_y_norm = eye_center_y * scale_factor
 
-            # 3. Crop ด้วยระยะคงที่จากตา (ทุกคนเท่ากัน!)
-            TOP_MARGIN = 200      # จากตาไปด้านบน (ผม + หน้าผาก) - เพิ่มเพื่อไม่ให้ผมขาด!
-            BOTTOM_MARGIN = 500   # จากตาไปด้านล่าง (จมูก + ปาก + คอ + ตัว)
-            SIDE_MARGIN = 150     # ซ้ายขวา
+            # 3. Crop แบบ TOP-ALIGNED: หัวชิดบน, ด้านล่างยาวลงไปเรื่อยๆ!
+            TOP_HEAD_PADDING = 250    # พื้นที่เหนือหัว (สำหรับผม) - ขึ้นจากตา
+            SIDE_MARGIN = 150         # ซ้ายขวา
 
-            crop_y1 = int(eye_center_y_norm - TOP_MARGIN)
-            crop_y2 = int(eye_center_y_norm + BOTTOM_MARGIN)
+            # หาจุดบนสุดของหัว (ประมาณจากตา)
+            head_top = int(eye_center_y_norm - TOP_HEAD_PADDING)
+
+            # Crop จากบนสุดของหัวลงไปจนสุดรูป! (ไม่ตัดด้านล่าง)
+            crop_y1 = max(0, head_top)  # บนสุดของหัว
+            crop_y2 = normalized_img.height  # ลงไปจนสุดรูป!
             crop_x1 = int(eye_center_x_norm - (TARGET_EYE_DISTANCE + SIDE_MARGIN))
             crop_x2 = int(eye_center_x_norm + (TARGET_EYE_DISTANCE + SIDE_MARGIN))
 
@@ -412,20 +415,12 @@ class Renderer:
         if placement.vertical_align == "bottom":
             # ชิดขอบล่าง: ให้ส่วนล่างของตัวละครชิดขอบล่างของ canvas
             paste_y = canvas.height - new_h
-        else:  # "top" (default)
-            # คำนวณตำแหน่งตาหลัง scale
-            eye_y_scaled = eye_y_in_crop * (new_h / crop_height)
+        else:  # "top" (default) - หัวชิดบน, ด้านล่างยาวลงไป!
+            # ให้หัวชิดขอบบน (เว้น margin เล็กน้อย)
+            TOP_CANVAS_MARGIN = 20  # เว้นจากขอบบน 20px
+            paste_y = TOP_CANVAS_MARGIN
 
-            # กำหนดตำแหน่งตาที่ต้องการบนจอ (เพิ่มจาก 360 → 450 เพื่อให้หัวห่างจากบนสุด!)
-            TARGET_EYE_Y = 450  # ตาทุกคนอยู่ที่ 450px จากบน - หัวห่างจากบนมาก!
-
-            # คำนวณ paste_y ให้ตาอยู่ที่ TARGET_EYE_Y
-            paste_y = int(TARGET_EYE_Y - eye_y_scaled)
-
-            # คำนวณตำแหน่งหัว (top of head)
-            head_top_y = paste_y
-            logger.info(f"      👁️  Eye positioning: eye_y_in_crop={eye_y_in_crop:.1f}px → scaled={eye_y_scaled:.1f}px → final_y={TARGET_EYE_Y}px")
-            logger.info(f"      👤 Head top at: {head_top_y}px from canvas top (should be > 0!)")
+            logger.info(f"      📍 Top-aligned: paste_y={paste_y}px (head at top, body extends down)")
 
         logger.info(
             f"      📍 Layout Position: X={placement.position.x}, Y={placement.position.y} | "
